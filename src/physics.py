@@ -321,6 +321,34 @@ def masked_residuals(x_free, model_name, inputs, y, n_steps, convergence_tol):
     return MaskedModel(model_name).residuals(x_free, inputs, y, n_steps, convergence_tol)
 
 
+# --- Arbitrary parameter pinning, picklable ------------------------------------
+# MODELS covers the named variants, but profiling needs a parameter pinned at an
+# arbitrary value. These are module-level (not closures) so differential_evolution
+# can ship them to worker processes -- a lambda here silently forces the whole fit
+# onto a single core.
+
+def pin_expand(x_free, pin_names, pin_values) -> np.ndarray:
+    """Free-parameter vector plus pinned values -> full parameter vector."""
+    full = np.zeros(len(PARAM_NAMES))
+    for name, value in zip(pin_names, pin_values):
+        full[PARAM_NAMES.index(name)] = value
+    free = [i for i, n in enumerate(PARAM_NAMES) if n not in pin_names]
+    full[free] = np.asarray(x_free, dtype=float)
+    return full
+
+
+def pin_free_indices(pin_names):
+    return [i for i, n in enumerate(PARAM_NAMES) if n not in pin_names]
+
+
+def pinned_objective(x_free, pin_names, pin_values, inputs, y, n_steps, convergence_tol):
+    return objective(pin_expand(x_free, pin_names, pin_values), inputs, y, n_steps, convergence_tol)
+
+
+def pinned_residuals(x_free, pin_names, pin_values, inputs, y, n_steps, convergence_tol):
+    return residuals(pin_expand(x_free, pin_names, pin_values), inputs, y, n_steps, convergence_tol)
+
+
 def reference_solve(x, inputs: dict[str, np.ndarray], indices) -> np.ndarray:
     """Independent check of `integrate` using scipy's stiff BDF solver.
 

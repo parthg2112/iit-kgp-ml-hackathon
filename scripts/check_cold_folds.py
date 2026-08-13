@@ -30,48 +30,54 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.data import ROOT, TARGET, load_train, ode_inputs, rmse
 from src.physics import (
+    CONVERGENCE_TOL,
     DEFAULT_STEPS,
     LOWER,
     PARAM_NAMES,
     SEARCH_STEPS,
     UPPER,
     integrate,
-    objective,
-    residuals,
+    pin_expand,
+    pinned_objective,
+    pinned_residuals,
 )
 
 ARTIFACTS = ROOT / "artifacts"
 FREE = [i for i, n in enumerate(PARAM_NAMES) if n != "n_flow"]
 
 
+PIN = ("n_flow",)
+PIN_VALS = (0.0,)
+
+
 def cold_fit(inputs, y, seed, maxiter, popsize):
     lo, hi = LOWER[FREE], UPPER[FREE]
 
-    def expand(xf):
-        full = np.zeros(len(PARAM_NAMES))
-        full[FREE] = xf
-        return full
-
+    # pinned_objective is module-level and therefore picklable, which is what lets
+    # workers=-1 actually spread across cores. Passing a lambda here silently
+    # confines the whole fit to one core -- it cost ~10 min per fold before.
     de = differential_evolution(
-        lambda xf: objective(expand(xf), inputs, y, SEARCH_STEPS, 0.05),
-        bounds=list(zip(lo, hi)), maxiter=maxiter, popsize=popsize, tol=1e-9,
+        pinned_objective,
+        bounds=list(zip(lo, hi)),
+        args=(PIN, PIN_VALS, inputs, y, SEARCH_STEPS, CONVERGENCE_TOL),
+        maxiter=maxiter, popsize=popsize, tol=1e-9,
         mutation=(0.3, 1.2), recombination=0.85, seed=seed,
-        polish=False, init="sobol", updating="deferred",
+        polish=False, init="sobol", updating="deferred", workers=-1,
     )
     best_x, best = de.x, float(de.fun)
     for k in range(3):
         rng = np.random.default_rng(seed + k)
         x0 = de.x if k == 0 else np.clip(de.x + rng.normal(0, 0.03, de.x.shape) * (hi - lo), lo, hi)
         try:
-            r = least_squares(lambda xf: residuals(expand(xf), inputs, y, DEFAULT_STEPS, None),
-                              x0=x0, bounds=(lo, hi), x_scale="jac",
-                              xtol=1e-13, ftol=1e-13, gtol=1e-13, max_nfev=800)
+            r = least_squares(pinned_residuals, x0=x0, bounds=(lo, hi),
+                              args=(PIN, PIN_VALS, inputs, y, DEFAULT_STEPS, None),
+                              x_scale="jac", xtol=1e-13, ftol=1e-13, gtol=1e-13, max_nfev=800)
         except Exception:
             continue
-        s = rmse(y, integrate(expand(r.x), inputs, n_steps=DEFAULT_STEPS))
+        s = rmse(y, integrate(pin_expand(r.x, PIN, PIN_VALS), inputs, n_steps=DEFAULT_STEPS))
         if s < best:
             best, best_x = s, r.x
-    return expand(best_x), best
+    return pin_expand(best_x, PIN, PIN_VALS), best
 
 
 def main() -> int:

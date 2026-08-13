@@ -252,14 +252,50 @@ print(f"\\nmean out-of-sample gain: {np.mean(gains):+.3f} RMSE")
 """),
     md("""
 The gain is consistent across every held-out seed and the weight is stable (0.88–0.92), so
-this is a real improvement rather than a weight fitted to noise. **We ship 0.91 physics +
-0.09 ExtraTrees.**
+this is a real improvement rather than a weight fitted to noise.
 
 Note what the 9% is doing: it is not "insurance" in the usual hand-wavy sense. The tree is
 2.8× less accurate overall, but its errors are *differently distributed* — it interpolates
 locally where our ODE carries a small systematic bias, so a small weight cancels part of
 that bias. A large weight would immediately reimport the tree's own much larger error, which
 is why the optimum is near 0.9 and not near 0.5.
+
+### 4d. …but a single global weight hides a defect
+
+Breaking the blend's gain down by prediction stratum shows it is not uniform. The tree
+*helps* in the mid-range and *hurts* at both ends — badly on the rows the physics already
+gets essentially perfect, and again at the top, where a tree cannot extrapolate past its
+outermost split and can only pull predictions toward the training mean.
+"""),
+    code("""
+from src.evaluate import apply_blend, BLEND_CUTOFF
+p_oof, t_oof = P.mean(0), Tr.mean(0)
+w = blend["weight"]
+flat = np.clip(w * p_oof + (1 - w) * t_oof, 0, 100)
+
+print(f"{'physics prediction':>20s} {'n':>4s} {'physics':>9s} {'flat blend':>11s} {'gain':>8s}")
+for lo, hi in [(-1, 0.5), (0.5, 10), (10, 50), (50, 85), (85, 101)]:
+    m = (p_oof > lo) & (p_oof <= hi)
+    if m.sum() < 2:
+        continue
+    gp, gb = rmse(y[m], p_oof[m]), rmse(y[m], flat[m])
+    print(f"{f'({lo:.0f}, {hi:.0f}]':>20s} {m.sum():4d} {gp:9.3f} {gb:11.3f} {gp-gb:+8.3f}")
+
+print(f"\\nregime-aware rule: blend below {BLEND_CUTOFF:.0f}, pure physics above")
+for i in range(P.shape[0]):
+    fi = np.clip(w * P[i] + (1 - w) * Tr[i], 0, 100)
+    ri = apply_blend(P[i], Tr[i], w)
+    print(f"  seed {i}: flat {rmse(y, fi):.4f} -> regime-aware {rmse(y, ri):.4f}  "
+          f"gain {rmse(y, fi) - rmse(y, ri):+.4f}")
+"""),
+    md("""
+The rule is one threshold with the weight held at its already-validated value, and it
+improves on **every** held-out seed. We ship **0.91 physics + 0.09 ExtraTrees below a
+predicted yield of 60, and pure physics above it** — which also restores the top of the
+prediction range (97.7 rather than 96.6).
+
+We only found this because we looked at the blend's gain *by regime*. A single global weight
+chosen on aggregate RMSE cannot see harm that is confined to one stratum.
 """),
     md("""
 ## 5. Model selection: what we tested and rejected
@@ -289,6 +325,53 @@ for name, r in sorted(mc.items(), key=lambda kv: kv[1]["train_rmse"]):
 Neural networks (150 rows), XGBoost/LightGBM hyperparameter searches (boosting measured
 *worst* of everything we tried), polynomial feature explosion, and outlier removal — the
 extreme rows are real physics regimes and carry the location of the yield cliff.
+"""),
+    md("""
+### 5b. How well is each parameter actually determined?
+
+Reporting a parameter without an interval is not a result. For each of the three parameters
+whose value was ever in question, we pinned it across a grid, refit everything else, and
+recorded the resulting training error. The flat bottom of each curve *is* the identifiable
+range — this is a profile likelihood, and it is what "robustness" means for a mechanistic
+model.
+"""),
+    code("""
+for name, label in [("E2_kJ", "E2 (waste-reaction activation energy)"),
+                    ("a1", "a1 (heat of the desired reaction)"),
+                    ("n_flow", "n_flow (exponent in U ~ Q^n)")]:
+    prof_path = ART / f"profile_{name}.json"   # not `f` -- that holds the feature frame
+    if not prof_path.exists():
+        continue
+    d = json.loads(prof_path.read_text())
+    ref = d["reference_rmse"]
+    pts = sorted(((float(k), v["train_rmse"]) for k, v in d["points"].items()))
+    ok = [v for v, s in pts if s <= ref * 1.10]
+    print(f"{label}")
+    for v, s in pts:
+        bar = "#" * int(round(min(s / ref, 5) * 8))
+        print(f"   {v:8.2f}  RMSE {s:8.4f}  ({s-ref:+7.4f})  {bar}")
+    print(f"   admissible (<=10% above optimum): {min(ok):g} .. {max(ok):g}\\n")
+"""),
+    md("""
+Three conclusions, each answering a challenge that was actually put to us:
+
+- **E₂ ∈ [210, 320] kJ/mol.** An independent reviewer's model reported E₂ ≈ 155. That value
+  costs **+2.62 RMSE** here and sits well outside the admissible interval, so it is excluded
+  by the data rather than merely disagreed with.
+- **a₁ is pinned at −11.8, and −11.8 alone.** Setting a₁ = 0 — the "concentration doesn't
+  enter thermally" hypothesis — costs **+4.54 RMSE**. This was proposed to us as a
+  *falsification* test of our concentration mechanism; it confirmed it instead.
+- **n_flow ∈ [−0.2, 0.0].** Turbulent internal flow would give h ∝ Re^0.8, i.e. n ≈ 0.8.
+  That costs **+11.40 RMSE** — a 4× degradation. So the jacket coupling in this reactor is
+  genuinely flow-independent in residence-time coordinates, which is a physical finding
+  about the system, not a failed fit.
+
+**Why we ship a single fit rather than an ensemble.** Averaging over parameter uncertainty
+is the right instinct under squared error, so we tested it: eight distinct admissible
+starting vectors (E₂ spanning 210–265) were refit inside a fold, and all eight converged to
+the *same* optimum to within 2e-4. The apparent spread came from pinning during profiling;
+once the pin is released there is a single well-defined optimum. There is no posterior to
+average over — which is itself the robustness claim.
 """),
     md("""
 ## 6. What the recovered parameters mean
@@ -344,6 +427,57 @@ print(f"at mean CA0 = {ca0:.2f} mol/L, adiabatic swings: {p.a1*ca0:+.0f} K then 
 print(f"net: {(p.a1 + p.a2)*ca0:+.1f} K  <- the near-cancellation")
 """),
     md("""
+## 6b. Where the remaining error actually lives
+
+Aggregate RMSE hides the structure of the problem. Grouping rows by how much the *training
+data itself* disagrees locally — the spread of yields among each row's six nearest
+neighbours in (log τ, T_in, T_jacket) — shows the error is almost entirely confined to the
+cliff.
+"""),
+    code("""
+Z = np.column_stack([f.log_tau, f.inlet_temperature_K / 50, f.jacket_temperature_K / 50])
+Zn = (Z - Z.mean(0)) / Z.std(0)
+D = np.sqrt(((Zn[:, None, :] - Zn[None, :, :]) ** 2).sum(-1))
+np.fill_diagonal(D, 9e9)
+spread = np.array([np.ptp(y[np.argsort(D[i])[:6]]) for i in range(len(train))])
+err2 = (P.mean(0) - y) ** 2
+
+print(f"{'neighbour spread':>18s} {'n':>4s} {'OOF RMSE':>10s} {'% of squared error':>20s}")
+for lo, hi in [(0, 20), (20, 50), (50, 80), (80, 101)]:
+    m = (spread >= lo) & (spread < hi)
+    if m.sum():
+        print(f"{f'{lo}-{hi}':>18s} {m.sum():4d} {np.sqrt(err2[m].mean()):10.3f} "
+              f"{100*err2[m].sum()/err2.sum():19.1f}%")
+m = spread >= 80
+print(f"\\n{m.sum()}/{len(train)} rows ({m.mean():.0%}) carry {100*err2[m].sum()/err2.sum():.0f}% "
+      f"of all squared error")
+"""),
+    md("""
+**29% of rows carry 91% of the squared error**, while the settled rows sit at an RMSE of
+0.65. This is the honest statement of what our score depends on: not the model's average
+quality, but how a minority of cliff-edge rows happen to fall. It also bounds the return on
+further modelling — nothing we do to the well-determined 71% can move the result.
+
+## 6c. An independent audit, and how we settled it
+
+An external reviewer fit their own physics model and disputed five of our test predictions.
+Rather than split the difference, we decided each against the training data.
+
+| Row | Their value | Ours | What settled it |
+|---|---|---|---|
+| 39, 41 | ~16 | **~0** | *All 15* training rows with jacket > 520 K and τ > 0.2 have yield ≈ 0 (max 0.297) |
+| 0 | 27.6 | **~68** | In the regime where our model says CA₀ raises yield, corr(CA₀, truth) = **+0.565** (+0.485 partial, controlling for τ and both temperatures); high-CA₀ rows there average 76.1 vs 31.0 for low-CA₀ |
+| 24 | 31.2 | **49.4** | Genuinely ambiguous — neighbours sit at 0.1 and 75.0. A hedge is correct |
+| 3, 23 | "compressed" | **83.5, 84.6** | Their jackets run 32–53 K *below* inlet, so the fluid is chilled to ~353 K and A never fully converts. Every training row above 99 has a *heating* jacket |
+
+The row-0 disagreement has an exact explanation: **at a₁ = 0 our model predicts 28.6 for
+that row** — essentially their 27.6. Their fit had effectively no thermal-concentration
+coupling, a setting our profile rejects at +4.54 RMSE.
+
+Two of their criticisms did land, and both are fixed: the tree component was shrinking our
+top-end predictions (section 4d), and our first cross-validation was frozen by a numerical
+guard (section 4).
+
 ## 7. Predictions and submission
 
 Contract: exactly 50 rows in `test_dataset.csv` order, one column headed `overall_yield`,
@@ -360,11 +494,13 @@ phys = integrate(meta["vector"], ode_inputs(test), n_steps=SUBMIT_STEPS)
 # Tree averaged over the same seeds the out-of-fold predictions used -- a
 # single-seed tree is a noisier estimator than the one w was chosen against.
 tree = np.mean([fit_predict(train, test, seed=s) for s in (0, 1, 2)], axis=0)
-w = blend["weight"]
-final = np.clip(w * phys + (1 - w) * tree, 0, 100)
+final = apply_blend(phys, tree, blend["weight"])   # regime-aware, see section 4d
 
 path = write_submission(final, "claude_ke_chatore")
-print(f"wrote {path.name}: {len(final)} rows, w={w:.3f} physics")
+n_mixed = int((phys <= BLEND_CUTOFF).sum())
+print(f"wrote {path.name}: {len(final)} rows, w={blend['weight']:.3f} physics below "
+      f"{BLEND_CUTOFF:.0f}, pure physics above")
+print(f"  {n_mixed} rows mixed, {len(final)-n_mixed} left as pure physics")
 print(f"  range [{final.min():.3f}, {final.max():.3f}], mean {final.mean():.3f}")
 pd.read_csv(path).head()
 """),

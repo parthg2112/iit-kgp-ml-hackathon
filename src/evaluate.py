@@ -81,6 +81,23 @@ def make_physics_predict_fn(x_start, n_steps: int = DEFAULT_STEPS) -> PredictFn:
     return predict
 
 
+# Above this physics prediction the tree is dropped entirely. Trees cannot
+# extrapolate past their outermost split, so on high-yield rows they can only pull
+# predictions toward the training mean -- measured as a one-directional loss
+# (97.7 -> 96.6, 93.0 -> 91.8, 95.1 -> 94.7). Below the cutoff, near the yield
+# cliff, the ODE carries its largest bias and local interpolation genuinely helps.
+# Validated leave-one-seed-out: 6.022 vs 6.105 for a flat blend, better on all
+# three held-out seeds.
+BLEND_CUTOFF = 60.0
+
+
+def apply_blend(physics, tree, weight: float, cutoff: float = BLEND_CUTOFF) -> np.ndarray:
+    """Regime-aware blend: mix below `cutoff`, pure physics above it."""
+    physics = np.asarray(physics, dtype=float)
+    mixed = np.clip(weight * physics + (1.0 - weight) * np.asarray(tree, dtype=float), 0.0, 100.0)
+    return np.where(physics <= cutoff, mixed, np.clip(physics, 0.0, 100.0))
+
+
 def best_blend_weight(y: np.ndarray, oof_a: np.ndarray, oof_b: np.ndarray, n_grid: int = 2001):
     """Pick w minimizing RMSE of w*a + (1-w)*b on out-of-fold predictions.
 

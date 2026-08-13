@@ -38,6 +38,7 @@ def make_hybrid_predict_fn(
     shrinkage: float = 1.0,
     n_steps: int = DEFAULT_STEPS,
     refit_physics: bool = True,
+    corrector_factory=None,
 ):
     """Build a (train_df, predict_df, seed) -> predictions callable.
 
@@ -69,7 +70,7 @@ def make_hybrid_predict_fn(
         if shrinkage == 0.0:
             return np.clip(phys_te, 0.0, 100.0)
 
-        corrector = make_corrector(seed)
+        corrector = (corrector_factory or make_corrector)(seed)
         Xtr = add_physics_features(train_df)[FEATURE_COLUMNS].to_numpy(dtype=float)
         corrector.fit(Xtr, y - phys_tr)
         Xte = add_physics_features(predict_df)[FEATURE_COLUMNS].to_numpy(dtype=float)

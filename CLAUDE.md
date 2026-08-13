@@ -29,8 +29,13 @@ $PY scripts/make_figures.py        # figures/physics_diagnostics.png
 
 # Diagnostics — run these before adding any parameter to the model
 $PY scripts/diagnose_fit.py        # self-recovery + poison-hit count (see below)
-$PY scripts/check_bounds.py        # refit with the box widened; is the optimum pinned? (~25 min)
+$PY scripts/check_bounds.py        # refit with the box widened; is the optimum pinned?
+$PY scripts/check_cold_folds.py    # cold-start folds; the honest generalization number
 $PY scripts/sweep_tanks.py         # tanks-in-series: does plug flow hold?
+$PY scripts/profile_params.py --param E2_kJ   # profile likelihood; also a1, n_flow, E1_kJ
+$PY scripts/verify_residual_hybrid.py         # does a residual corrector earn its place?
+$PY scripts/weighted_ensemble.py              # is there a posterior worth averaging over?
+$PY scripts/audit_rows.py                     # row-level verdicts vs an external audit
 ```
 
 Scripts insert the repo root on `sys.path` and import `src.*`; run them from the repo root.
@@ -43,6 +48,21 @@ Re-execute the notebook after any result changes; it reads `artifacts/` at runti
 **Budget note:** `least_squares` uses a finite-difference Jacobian, so each `nfev` costs
 `n_free + 1` integrations. `max_nfev=6000` made a single model take ~25 minutes for no
 accuracy gain; 800 is plenty. Polish converges long before the cap.
+
+**Never pass a lambda or closure to `differential_evolution`.** It cannot be pickled, so
+`workers=-1` is impossible and the fit silently runs on **one of 12 cores** — this cost
+~10x on `check_bounds.py` (25 min) and `profile_params.py` (8.7 min/point) before it was
+caught. Use the module-level `pinned_objective` / `pinned_residuals` in `src/physics.py`,
+which take the pinned parameters via `args=(pin_names, pin_values, ...)`.
+
+For a grid of *independent* fits, put the parallelism one level up — a process per grid
+point via `multiprocessing.Pool` with each fit single-threaded — rather than `workers=-1`
+inside each fit. `profile_params.py` does this: 10 points went from ~70 min to ~9 min.
+Do not do both at once; that oversubscribes the cores.
+
+This workload is **not** GPU-suited and no GPU path is worth building: the integrator is a
+sequential loop of 512–2048 steps over 150-element arrays, so kernel-launch overhead would
+exceed the arithmetic. Parallelism across fits is the only lever.
 
 ## The task
 
@@ -173,20 +193,59 @@ Recovered: E1 = 43.2, E2 = 250.1 kJ/mol, a1 = −11.79, a2 = +11.34 K·L/mol, U 
 `check_bounds.py` refit with the box widened to E1∈[5,400], E2∈[20,600] and landed on the
 same values with nothing at a constraint — the activation energies are real, not artifacts.
 
-Blend search returns **w = 0.910** on physics. This is a real gain, not weight-fitted noise:
-leave-one-seed-out (choose w on two seeds, score on the third) gives **+0.241 RMSE**
-consistently across all three, and w is stable at 0.878–0.919. The brief's fixed 70/30 still
-loses (6.727 vs 5.711) — the point is to *search* the weight, not to avoid blending.
+Blend search returns **w = 0.910** on physics, validated leave-one-seed-out (+0.241 vs pure
+physics, positive on all three seeds; w stable at 0.878–0.919).
 
-The tree's 9% is not vague "insurance": it is 2.8× less accurate overall but its errors are
-differently distributed, so a small weight cancels part of the ODE's systematic bias before
-the tree's own larger error dominates.
+**But a single global weight hid a defect.** Broken down by prediction stratum the tree
+*helps* mid-range and *hurts* at both ends — worst on the near-zero rows the physics gets
+almost exactly right (0.319 → 1.319 RMSE over 57 rows), and again at the top where a tree
+cannot extrapolate. The shipped rule is therefore **regime-aware**: blend below a predicted
+yield of 60, pure physics above (`BLEND_CUTOFF` and `apply_blend` in `src/evaluate.py`).
+Leave-one-seed-out: 6.022 vs 6.105 flat, better on all three seeds, and it restores the top
+of the range (97.7 vs 96.6).
 
-`make_submission.py` blends by default (`--no-blend` for pure physics) and averages the tree
-over seeds 0–2 to match the estimator the weight was chosen against.
+`make_submission.py` applies this by default (`--no-blend` for pure physics, `--cutoff` to
+override) and averages the tree over seeds 0–2 to match the estimator w was chosen against.
 
-Residual correction (`src/residual.py`) gains ≤0.05 at every shrinkage — the residual is not
-learnable by a tree (4.38 → 4.25 OOF). Not used.
+Residual correction (`src/residual.py`) is **rejected**, re-verified at high effort by
+`scripts/verify_residual_hybrid.py`: Ridge / shallow-ExtraTrees / small-GBM correctors over
+5 seeds with the ODE refit per fold gain at most **+0.027** against a 0.3 bar. Our residual
+carries little learnable structure — which is why an external audit measuring against a
+weaker physics fit (train RMSE 11.3) saw a large hybrid gain and we do not.
+
+## Identifiability — profile likelihoods
+
+`scripts/profile_params.py --param <name>` pins a parameter across a grid, refits the rest,
+and reports the admissible interval (≤10% above optimum). Runs all grid points in parallel.
+
+| Parameter | Admissible | Settles |
+|---|---|---|
+| `E2_kJ` | **[210, 320]** | An audit's E₂ ≈ 155 costs +2.62 RMSE — excluded, not merely disputed |
+| `a1` | **−11.79 only** | a₁ = 0 costs **+4.54**. The thermal-concentration pathway is required, not optional |
+| `n_flow` | **[−0.2, 0.0]** | Turbulent h ∝ Re^0.8 (n ≈ 0.8) costs **+11.40** — the jacket coupling really is flow-independent in residence-time coordinates |
+
+**Do not add an ensemble over parameter uncertainty.** Tested: eight distinct admissible
+starts (E₂ spanning 210–265) refit inside a fold all converge to the *same* optimum to
+within 2e-4 (`scripts/weighted_ensemble.py`). The apparent spread is an artifact of pinning
+during profiling. There is no posterior to average over, which matches the likelihood
+arithmetic — at n=150, RMSE 3.66 vs 3.99 is a weight ratio near 2.5e-6.
+
+## Where the error lives
+
+Grouping training rows out-of-fold by the spread of yields among their six nearest
+neighbours in (log τ, T_in, T_jacket):
+
+| Neighbour spread | n | OOF RMSE | % of squared error |
+|---|---|---|---|
+| 0–20 | 47 | 0.652 | 0.4% |
+| 80–101 | 44 | 10.410 | **91.0%** |
+
+**29% of rows carry 91% of the error.** Further modelling of the well-determined majority
+cannot move the score; the result is decided by how the cliff-edge rows fall. Use this to
+judge whether a proposed improvement is worth the time.
+
+`scripts/audit_rows.py` records the row-level verdicts against an external audit (rows 0,
+24, 39, 41, 3, 23), each decided on training evidence rather than model preference.
 
 `guide.md` is a team brief, not ground truth — three of its checkable claims are wrong:
 it says 18% of rows exceed yield 90 (actually 12%), that test ranges sit inside train

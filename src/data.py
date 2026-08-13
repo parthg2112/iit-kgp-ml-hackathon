@@ -13,8 +13,9 @@ import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parent.parent
-TRAIN_CSV = ROOT / "train_dataset.csv"
-TEST_CSV = ROOT / "test_dataset.csv"
+DATA_DIR = ROOT / "data"
+TRAIN_CSV = DATA_DIR / "train_dataset.csv"
+TEST_CSV = DATA_DIR / "test_dataset.csv"
 
 RAW_FEATURES = [
     "flow_rate_L_min",

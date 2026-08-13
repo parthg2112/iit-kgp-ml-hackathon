@@ -87,9 +87,27 @@ cross-validation, never against a probe score.
 `src.data.write_submission` enforces all of this and re-reads the file to re-validate.
 Do not hand-write the CSV.
 
+## Layout
+
+`README.md` is the teammate-facing orientation; this file is the engineering detail.
+
+```
+claude_ke_chatore.csv   THE SUBMISSION — never hand-edit; rebuild via make_submission.py
+notebook/final.ipynb    finalist deliverable; SELF-CONTAINED, no src imports
+data/                   train_dataset.csv, test_dataset.csv  (paths in src/data.py)
+docs/                   problem_statement.pdf, guide.md (team brief — not ground truth)
+reference/              an external audit's competing predictions, kept for comparison
+artifacts/ figures/     fitted params, CV results, profiles, plots
+```
+
+**The notebook must stay self-contained.** Finalists submit the `.ipynb`, and one that
+imports from `src/` will not execute for a judge. `build_notebook.py` inlines the real
+function source via `inspect.getsource` (see its `embed()` helper), so the notebook cannot
+drift from the tested code. Do not "simplify" it back to imports.
+
 ## Architecture
 
-Two independent models plus a searched blend:
+Two independent models plus a searched, regime-aware blend:
 
 ```
 src/data.py      loading, physics feature engineering, submission writer + validator

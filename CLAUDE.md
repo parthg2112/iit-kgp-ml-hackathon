@@ -236,11 +236,25 @@ weaker physics fit (train RMSE 11.3) saw a large hybrid gain and we do not.
 `scripts/profile_params.py --param <name>` pins a parameter across a grid, refits the rest,
 and reports the admissible interval (≤10% above optimum). Runs all grid points in parallel.
 
-| Parameter | Admissible | Settles |
-|---|---|---|
-| `E2_kJ` | **[210, 320]** | An audit's E₂ ≈ 155 costs +2.62 RMSE — excluded, not merely disputed |
-| `a1` | **−11.79 only** | a₁ = 0 costs **+4.54**. The thermal-concentration pathway is required, not optional |
-| `n_flow` | **[−0.2, 0.0]** | Turbulent h ∝ Re^0.8 (n ≈ 0.8) costs **+11.40** — the jacket coupling really is flow-independent in residence-time coordinates |
+Quote the **F-test** intervals below, not the 10%-RMSE band the script prints. That band is
+a display heuristic and is far too generous (it gave E₂ ∈ [210, 320]); the F-test criterion
+is `RMSE ≤ RMSE_min · sqrt(1 + F(1, n−p, α)/(n−p))` with n=150, p=7.
+
+| Parameter | Best | 1σ | 95% |
+|---|---|---|---|
+| `E2_kJ` | 250.0 | [244.6, 257.4] | **[233.8, 269.9]** |
+| `a1` | −11.79 | [−11.88, −11.71] | **[−12.12, −11.49]** |
+| `n_flow` | 0.00 | [−0.01, 0.00] | **[−0.03, 0.02]** |
+
+What each settles:
+- **E₂** — an audit's E₂ ≈ 155 sits at RMSE 6.28, nowhere near the interval. Excluded, not
+  merely disputed. An independent blind refit (different integrator and optimizer, no access
+  to our code) produced 95% [234, 271] — agreeing with ours to **1 kJ/mol on both ends**.
+- **a₁** — a₁ = 0 costs **+4.54 RMSE** and is far outside the interval. The
+  thermal-concentration pathway is required, not optional.
+- **n_flow** — turbulent h ∝ Re^0.8 (n ≈ 0.8) costs **+11.40**. The 95% interval excludes
+  even 0.03, so the jacket coupling is flow-independent in residence-time coordinates and
+  the controlling thermal resistance is not on the process side.
 
 **Do not add an ensemble over parameter uncertainty.** Tested: eight distinct admissible
 starts (E₂ spanning 210–265) refit inside a fold all converge to the *same* optimum to
@@ -292,14 +306,48 @@ Each was fitted and measured, not argued away:
 |---|---|
 | Flow-dependent jacket U, `(Q/Q_ref)^n` | n ≈ −0.03, inactive; +0.015 RMSE for one extra param |
 | Thermally neutral reactions | 8.27 vs 3.66 — clearly worse |
-| Parallel A→C path | Ruled out on data: yields reach 99.97%, a parallel path caps yield below 100% |
+| Parallel A→C path | **This earlier reasoning was wrong** — see the correction below. Being retested properly |
 | Axial dispersion (tanks-in-series) | At *fixed* params worth only ~0.08 RMSE. Larger apparent gains came from refitting against the coarse cascade's discretization error — same failure mode as the step-drift bug |
 
 The self-recovery test in `diagnose_fit.py` is the tool that made these calls trustworthy:
 it regenerates targets from the fitted parameters and refits from scratch. It recovers all
-7 parameters to 5 decimals (RMSE 0.00000), which proves the optimizer is sound and that
-residual error is genuine model-form error. **Run it before concluding "the search failed"
-or "the model needs another parameter" — those two look identical without it.**
+7 parameters to 5 decimals (RMSE 0.00000), which proves the optimizer is sound. **Run it
+before concluding "the search failed" or "the model needs another parameter" — those two
+look identical without it.**
+
+### Correction: the A→C rule-out was invalid
+
+"Yields reach 99.97%, so a parallel path is excluded" only bounds `k3/(k1+k3) < 0.0003`
+**at that row's temperature of 383 K**, while the data spans 363–516 K. Since k₃ carries its
+own activation energy it can be negligible at 383 K and significant at 516 K. The argument
+was locally true and globally invalid.
+
+## The residual is input noise, not model-form error
+
+This corrects an earlier framing that ran through the whole project ("the data is
+deterministic simulator output, so the theoretical best RMSE is ~0, and any error is *our*
+modelling error"). **That was wrong**, and it made every plateau look like a failure to find
+missing physics. Three independent lines of evidence:
+
+1. **Residual scales with temperature sensitivity.** Binning training rows by |dYield/dT|:
+   the least-sensitive quintile has RMSE **0.200**, the most-sensitive **7.393**. The implied
+   temperature error is consistent across quintiles at **~2–4 K** (median 2.24 K).
+2. **Residuals are unbiased.** In the most-sensitive quintile the mean residual is −1.14
+   against a std of 7.30 (t = −0.84, not significant), and the sign split is 12+/18−. Genuine
+   model-form error would bias a regime, not scatter symmetrically about it.
+3. **A noise model reproduces the magnitude.** Injecting N(0, 2.24 K) into both temperatures
+   yields RMSE **4.29** against our actual **3.66** — the noise model slightly *overshoots*,
+   so ~1.9 K accounts for all of it.
+
+Add the residual scan finding no structure across ~104 feature terms (largest |r| = 0.137),
+and the conclusion is that **the model is at the noise floor**. Chasing the remaining 3.66
+with more mechanism is chasing noise. This also re-explains the error concentration below:
+those rows dominate not because they are "hard" but because dYield/dT is large there and
+input noise is amplified.
+
+Caveat worth stating honestly: a model error that happened to be both zero-mean *and*
+proportional to temperature sensitivity would mimic this. Three lines pointing the same way
+makes that a strong coincidence, but it is not a proof.
 
 ## Out of scope (rubric explicitly penalizes brute force)
 

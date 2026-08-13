@@ -4,3 +4,4 @@ __pycache__/
 # Smoke/scratch fit outputs; the real results are committed.
 artifacts/smoke*
 artifacts/*.log
+scratch/

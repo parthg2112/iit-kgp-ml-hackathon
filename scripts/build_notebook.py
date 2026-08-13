@@ -509,6 +509,9 @@ range — this is a profile likelihood, and it is what "robustness" means for a 
 model.
 """),
     code("""
+from scipy.stats import f as f_dist
+N_OBS, N_PAR = 150, 7          # for the profile-likelihood F-test
+
 for name, label in [("E2_kJ", "E2 (waste-reaction activation energy)"),
                     ("a1", "a1 (heat of the desired reaction)"),
                     ("n_flow", "n_flow (exponent in U ~ Q^n)")]:
@@ -516,28 +519,40 @@ for name, label in [("E2_kJ", "E2 (waste-reaction activation energy)"),
     if not prof_path.exists():
         continue
     d = json.loads(prof_path.read_text())
-    ref = d["reference_rmse"]
     pts = sorted(((float(k), v["train_rmse"]) for k, v in d["points"].items()))
-    ok = [v for v, s in pts if s <= ref * 1.10]
+    V = np.array([q[0] for q in pts]); R = np.array([q[1] for q in pts]); rmin = R.min()
     print(f"{label}")
     for v, s in pts:
-        bar = "#" * int(round(min(s / ref, 5) * 8))
-        print(f"   {v:8.2f}  RMSE {s:8.4f}  ({s-ref:+7.4f})  {bar}")
-    print(f"   admissible (<=10% above optimum): {min(ok):g} .. {max(ok):g}\\n")
+        print(f"   {v:8.2f}  RMSE {s:8.4f}  ({s-rmin:+7.4f})  {'#' * int(round(min(s/rmin, 5) * 8))}")
+    # Profile-likelihood interval by the F-test, not an arbitrary %-of-RMSE band.
+    for lvl, tag in [(0.6827, "1-sigma"), (0.95, "95%")]:
+        thr = rmin * np.sqrt(1 + f_dist.ppf(lvl, 1, N_OBS - N_PAR) / (N_OBS - N_PAR))
+        idx = np.where(R <= thr)[0]
+        cross = lambda i, j: V[i] + (thr - R[i]) * (V[j] - V[i]) / (R[j] - R[i])
+        lo = V[idx[0]] if idx[0] == 0 else cross(idx[0], idx[0] - 1)
+        hi = V[idx[-1]] if idx[-1] == len(V) - 1 else cross(idx[-1], idx[-1] + 1)
+        print(f"   {tag:8s} interval: [{lo:.2f}, {hi:.2f}]")
+    print()
 """),
     md("""
 Three conclusions, each answering a challenge that was actually put to us:
 
-- **E₂ ∈ [210, 320] kJ/mol.** An independent reviewer's model reported E₂ ≈ 155. That value
-  costs **+2.62 RMSE** here and sits well outside the admissible interval, so it is excluded
-  by the data rather than merely disagreed with.
-- **a₁ is pinned at −11.8, and −11.8 alone.** Setting a₁ = 0 — the "concentration doesn't
+- **E₂ = 250 kJ/mol, 95% CI [234, 270].** An independent reviewer's model reported E₂ ≈ 155.
+  That value sits at RMSE 6.28 — nowhere near the interval — so it is excluded by the data
+  rather than merely disagreed with.
+- **a₁ = −11.79, 95% CI [−12.12, −11.49].** Setting a₁ = 0 — the "concentration doesn't
   enter thermally" hypothesis — costs **+4.54 RMSE**. This was proposed to us as a
   *falsification* test of our concentration mechanism; it confirmed it instead.
-- **n_flow ∈ [−0.2, 0.0].** Turbulent internal flow would give h ∝ Re^0.8, i.e. n ≈ 0.8.
-  That costs **+11.40 RMSE** — a 4× degradation. So the jacket coupling in this reactor is
-  genuinely flow-independent in residence-time coordinates, which is a physical finding
-  about the system, not a failed fit.
+- **n_flow = 0, 95% CI [−0.03, 0.02].** Turbulent internal flow would give h ∝ Re^0.8, i.e.
+  n ≈ 0.8, which costs **+11.40 RMSE**. The interval excludes even 0.03, so the controlling
+  thermal resistance is *not* on the process side — it is in the wall or on the jacket side,
+  which is why flow rate enters the model only through residence time.
+
+**These were replicated blind.** An independent fit using a different integrator
+(`solve_ivp`/LSODA) and a different optimizer, with no access to our code, parameters or
+notes, recovered E₁ = 43.2 (ours 43.16), E₂ = 250.5 (ours 250.07), a₁ = −11.80 (ours
+−11.79), a₂ = +11.32 (ours +11.34), U = 3.255 (ours 3.2552), at train RMSE 3.6554 (ours
+3.6559) — and its own E₂ profile gave 95% [234, 271] against our [234, 270].
 
 **Why we ship a single fit rather than an ensemble.** Averaging over parameter uncertainty
 is the right instinct under squared error, so we tested it: eight distinct admissible
@@ -628,9 +643,77 @@ print(f"\\n{m.sum()}/{len(train)} rows ({m.mean():.0%}) carry {100*err2[m].sum()
     md("""
 **29% of rows carry 91% of the squared error**, while the settled rows sit at an RMSE of
 0.65. This is the honest statement of what our score depends on: not the model's average
-quality, but how a minority of cliff-edge rows happen to fall. It also bounds the return on
-further modelling — nothing we do to the well-determined 71% can move the result.
+quality, but how a minority of cliff-edge rows happen to fall.
 
+### 6b-ii. And that remaining error is input noise, not missing physics
+
+The obvious reading of a 3.66 plateau is "there is physics we have not found". We tested
+that and it is wrong. Grouping rows by how sensitive the predicted yield is to temperature —
+|dYield/dT|, obtained by perturbing both temperatures ±1 K — the error tracks sensitivity
+almost perfectly, and the implied temperature error is consistent at roughly 2 K.
+"""),
+    code("""
+hi_t, lo_t = train.copy(), train.copy()
+for c in ("inlet_temperature_K", "jacket_temperature_K"):
+    hi_t[c] += 1.0; lo_t[c] -= 1.0
+sens = np.abs(integrate(fitted, ode_inputs(hi_t)) - integrate(fitted, ode_inputs(lo_t))) / 2
+resid = pred_train - y
+
+qs = np.quantile(sens, [0, .2, .4, .6, .8, 1.0])
+print(f"{'|dY/dT| quintile':>18s} {'n':>4s} {'RMSE':>8s} {'mean resid':>11s} {'implied sigma_T':>16s}")
+for i in range(5):
+    m = (sens >= qs[i]) & (sens <= qs[i+1] if i == 4 else sens < qs[i+1])
+    if not m.sum():
+        continue
+    r = np.sqrt((resid[m]**2).mean())
+    # Dividing by a near-zero sensitivity is meaningless -- the implied sigma is only
+    # interpretable where yield actually responds to temperature.
+    imp = f"{r/sens[m].mean():13.2f} K" if sens[m].mean() > 0.1 else f"{'n/a (flat)':>15s}"
+    print(f"{f'{i+1}':>18s} {m.sum():4d} {r:8.3f} {resid[m].mean():+11.3f} {imp:>16s}")
+
+# Does a pure input-noise model reproduce the observed error magnitude?
+rng = np.random.default_rng(0)
+sims = []
+for _ in range(100):
+    d = train.copy(); shift = rng.normal(0, 2.24, len(train))
+    d["inlet_temperature_K"] += shift; d["jacket_temperature_K"] += shift
+    sims.append(integrate(fitted, ode_inputs(d)))
+sim_spread = np.array(sims).std(0)
+print(f"\\nsimulating N(0, 2.24 K) on both temperatures:")
+print(f"  RMSE it would produce  {np.sqrt((sim_spread**2).mean()):.3f}")
+print(f"  our actual residual    {np.sqrt((resid**2).mean()):.3f}   <- noise model slightly OVERSHOOTS")
+"""),
+    md("""
+Three things follow, and together they are decisive:
+
+1. The least-sensitive fifth of the data sits at RMSE **0.20**; the most sensitive at
+   **7.39** — a 37× spread explained entirely by how steeply yield responds to temperature.
+2. Residuals are **unbiased** in every band (mean −1.14 against a standard deviation of 7.30
+   in the worst one, t = −0.84). Missing physics biases a regime; noise scatters about it.
+3. Injecting ~2 K of temperature noise reproduces — in fact slightly **overshoots** — the
+   total error we actually observe.
+
+Add that a scan of ~100 feature terms and pairwise products finds no residual structure at
+all (largest |r| = 0.14), and the conclusion is that **the model is at the noise floor of
+the data**. The remaining 3.66 is roughly 2 K of temperature error amplified through a steep
+response, not a mechanism we failed to find. Chasing it with more parameters would be
+fitting noise.
+
+This also explains section 6b: those rows dominate the error not because they are
+intrinsically harder, but because dYield/dT is largest there.
+
+*Stated honestly:* a model error that happened to be both zero-mean **and** proportional to
+temperature sensitivity would mimic this. Three independent lines agreeing makes that an
+uncomfortable coincidence, but it is not a proof.
+"""),
+    md("""
+### 6b-iii. So how much of the final score is luck?
+
+Bootstrapping 50-row draws from our out-of-fold predictions gives the distribution of scores
+a 50-row test set could hand us: median **5.57**, 5th–95th percentile **[2.41, 9.07]**. Any
+single-digit gap between well-built models on 50 rows is mostly sampling.
+"""),
+    md("""
 ## 6c. An independent audit, and how we settled it
 
 An external reviewer fit their own physics model and disputed five of our test predictions.

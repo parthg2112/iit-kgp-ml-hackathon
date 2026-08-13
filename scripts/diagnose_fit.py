@@ -53,14 +53,14 @@ def poison_probe(x_true, inputs, y):
             for sign in (+1, -1):
                 xp = np.array(x_true, dtype=float)
                 xp[j] = np.clip(xp[j] + sign * eps * max(1.0, abs(xp[j])), LOWER[j], UPPER[j])
-                r = residuals(xp, inputs, y, n_steps=DEFAULT_STEPS)
+                r = residuals(xp, inputs, y, DEFAULT_STEPS, CONVERGENCE_TOL)
                 trials += 1
                 hits += int(np.allclose(r, POISON))
 
     # And a wider random cloud, the region a polish start wanders through.
     for _ in range(200):
         xp = np.clip(np.array(x_true) + rng.normal(0, 0.04, len(x_true)) * span, LOWER, UPPER)
-        r = residuals(xp, inputs, y, n_steps=DEFAULT_STEPS)
+        r = residuals(xp, inputs, y, DEFAULT_STEPS, CONVERGENCE_TOL)
         trials += 1
         hits += int(np.allclose(r, POISON))
 
@@ -95,7 +95,7 @@ def main() -> int:
     de = differential_evolution(
         objective,
         bounds=list(zip(LOWER, UPPER)),
-        args=(inputs, y_syn, SEARCH_STEPS),
+        args=(inputs, y_syn, SEARCH_STEPS, CONVERGENCE_TOL),
         maxiter=1200, popsize=24, tol=1e-8,
         mutation=(0.3, 1.2), recombination=0.85,
         seed=0, polish=False, init="sobol",

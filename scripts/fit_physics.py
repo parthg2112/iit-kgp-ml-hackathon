@@ -27,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.data import ROOT, TARGET, load_train, ode_inputs, rmse
 from src.physics import (
+    CONVERGENCE_TOL,
     DEFAULT_STEPS,
     LOWER,
     PARAM_NAMES,
@@ -62,7 +63,11 @@ def main() -> int:
     de = differential_evolution(
         objective,
         bounds=bounds,
-        args=(inputs, y, SEARCH_STEPS),
+        # Guard ON for the global search: it keeps DE out of stiff corners where
+        # the integration has not converged. It is deliberately left OFF for the
+        # polish below (residuals() defaults it off) -- a poison value is a cliff
+        # in the objective and ruins a finite-difference Jacobian.
+        args=(inputs, y, SEARCH_STEPS, CONVERGENCE_TOL),
         maxiter=args.maxiter,
         popsize=args.popsize,
         tol=1e-8,

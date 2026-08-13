@@ -238,8 +238,18 @@ def residuals(
     inputs: dict[str, np.ndarray],
     y: np.ndarray,
     n_steps: int = DEFAULT_STEPS,
-    convergence_tol: float = CONVERGENCE_TOL,
+    convergence_tol: float | None = None,
 ) -> np.ndarray:
+    """Prediction error per row, with an optional convergence guard.
+
+    The guard defaults **off**. It belongs in the global search, where it stops
+    differential evolution wandering into stiff corners, and it must be passed
+    explicitly there (`convergence_tol=CONVERGENCE_TOL`). It must NOT be on
+    during a `least_squares` polish: the poison value is a cliff in an otherwise
+    smooth objective, and a finite-difference Jacobian straddling that cliff is
+    garbage. Measured directly -- the guard fires 159/256 times around the
+    optimum, and turning it off during polish moved the fit from 4.38 to 3.66.
+    """
     pred = integrate(x, inputs, n_steps=n_steps)
 
     if convergence_tol is not None:
@@ -259,7 +269,7 @@ def objective(
     inputs: dict[str, np.ndarray],
     y: np.ndarray,
     n_steps: int = DEFAULT_STEPS,
-    convergence_tol: float = CONVERGENCE_TOL,
+    convergence_tol: float | None = None,
 ) -> float:
     r = residuals(x, inputs, y, n_steps=n_steps, convergence_tol=convergence_tol)
     return float(np.sqrt(np.mean(r**2)))
@@ -294,10 +304,10 @@ class MaskedModel:
     def restrict(self, x_full) -> np.ndarray:
         return np.asarray(x_full, dtype=float)[self.free_idx]
 
-    def residuals(self, x_free, inputs, y, n_steps=DEFAULT_STEPS, convergence_tol=CONVERGENCE_TOL):
+    def residuals(self, x_free, inputs, y, n_steps=DEFAULT_STEPS, convergence_tol=None):
         return residuals(self.expand(x_free), inputs, y, n_steps, convergence_tol)
 
-    def objective(self, x_free, inputs, y, n_steps=DEFAULT_STEPS, convergence_tol=CONVERGENCE_TOL):
+    def objective(self, x_free, inputs, y, n_steps=DEFAULT_STEPS, convergence_tol=None):
         return objective(self.expand(x_free), inputs, y, n_steps, convergence_tol)
 
 

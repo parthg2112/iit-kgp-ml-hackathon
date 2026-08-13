@@ -164,12 +164,13 @@ Every number below is **repeated 10-fold cross-validation across multiple seeds*
 ODE parameters **refit inside each fold**. A single train/test split at n=150 moves by
 several RMSE points with the seed, and we get exactly one submission.
 
-**One caveat we had to catch on ourselves.** The per-fold refit warm-starts from the
-full-data optimum. On 135 of 150 rows that start is already near-optimal, so the refit
-barely moves and the out-of-fold error collapses onto the training error — the physics row
-below reads `± 0.000`, and a *zero* seed-to-seed spread is a red flag, not a triumph. It
-means the folds were not independent of the rows they were scored against. Section 4b
-repeats the exercise with a genuinely cold start.
+**One caveat we had to catch on ourselves.** Our first cross-validation reported the physics
+model at `± 0.000` across seeds — and a *zero* spread is a red flag, not a triumph. Two
+things caused it: the per-fold refit warm-starts from the full-data optimum, and a numerical
+convergence guard in our residual function was firing throughout that neighbourhood, so the
+folds could not move away from the starting point at all. The folds were therefore not
+independent of the rows they were scored against. We fixed the guard and re-ran the whole
+exercise from a genuinely cold start in section 4b — those are the numbers we stand behind.
 """),
     code("""
 blend = json.loads((ART / "blend.json").read_text())
@@ -226,14 +227,39 @@ flattering single number.
     md("""
 ### The blend weight is searched, not assumed
 
-A fixed 70/30 physics/tree blend is the wrong instinct when the two models are far apart in
-accuracy — it would pay a large error premium for "insurance". We choose the weight by
-minimizing **out-of-fold** RMSE instead.
+A *fixed* blend ratio is guesswork. We choose the weight by minimizing **out-of-fold** RMSE,
+then check the choice is not itself an artifact by leave-one-seed-out: pick the weight on two
+seeds, score it on the third.
 """),
     code("""
-print(f"best physics weight w = {blend['weight']:.3f}  ->  OOF RMSE {blend['oof_rmse_at_weight']:.3f}")
-for s, st in blend.get("hybrid_cv", {}).items():
-    print(f"  residual correction, shrinkage {s}: {st['mean']:.3f}")
+import numpy as np
+from src.evaluate import best_blend_weight
+P, Tr = np.load(ART / "physics_oof.npy"), np.load(ART / "tree_oof.npy")
+
+print(f"chosen weight w = {blend['weight']:.3f}  ->  OOF RMSE {blend['oof_rmse_at_weight']:.3f}")
+print(f"  w=1.000 (pure physics)      {rmse(y, P.mean(0)):.3f}")
+print(f"  w=0.000 (tree only)         {rmse(y, Tr.mean(0)):.3f}\\n")
+
+gains = []
+for i in range(P.shape[0]):
+    others = [j for j in range(P.shape[0]) if j != i]
+    w_i, _, _, _ = best_blend_weight(y, P[others].mean(0), Tr[others].mean(0))
+    blended = rmse(y, np.clip(w_i * P[i] + (1 - w_i) * Tr[i], 0, 100))
+    pure = rmse(y, P[i])
+    gains.append(pure - blended)
+    print(f"  hold seed {i}: w={w_i:.3f} -> {blended:.3f} vs pure {pure:.3f}   gain {pure-blended:+.3f}")
+print(f"\\nmean out-of-sample gain: {np.mean(gains):+.3f} RMSE")
+"""),
+    md("""
+The gain is consistent across every held-out seed and the weight is stable (0.88–0.92), so
+this is a real improvement rather than a weight fitted to noise. **We ship 0.91 physics +
+0.09 ExtraTrees.**
+
+Note what the 9% is doing: it is not "insurance" in the usual hand-wavy sense. The tree is
+2.8× less accurate overall, but its errors are *differently distributed* — it interpolates
+locally where our ODE carries a small systematic bias, so a small weight cancels part of
+that bias. A large weight would immediately reimport the tree's own much larger error, which
+is why the optimum is near 0.9 and not near 0.5.
 """),
     md("""
 ## 5. Model selection: what we tested and rejected
@@ -326,11 +352,20 @@ every one of these and re-reads the file to re-validate.
 """),
     code("""
 from src.data import write_submission
+from src.baseline import fit_predict
+
 # SUBMIT_STEPS (not DEFAULT_STEPS): at 512 substeps individual predictions still
 # move ~0.22 yield-points, and the finer grid scores better. Costs ~90 ms once.
-final = np.clip(integrate(meta["vector"], ode_inputs(test), n_steps=SUBMIT_STEPS), 0, 100)
+phys = integrate(meta["vector"], ode_inputs(test), n_steps=SUBMIT_STEPS)
+# Tree averaged over the same seeds the out-of-fold predictions used -- a
+# single-seed tree is a noisier estimator than the one w was chosen against.
+tree = np.mean([fit_predict(train, test, seed=s) for s in (0, 1, 2)], axis=0)
+w = blend["weight"]
+final = np.clip(w * phys + (1 - w) * tree, 0, 100)
+
 path = write_submission(final, "Claude ke Chatore")
-print(f"wrote {path.name}: {len(final)} rows, range [{final.min():.3f}, {final.max():.3f}]")
+print(f"wrote {path.name}: {len(final)} rows, w={w:.3f} physics")
+print(f"  range [{final.min():.3f}, {final.max():.3f}], mean {final.mean():.3f}")
 pd.read_csv(path).head()
 """),
     md("""

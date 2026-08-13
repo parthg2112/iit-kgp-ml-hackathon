@@ -101,12 +101,18 @@ Three non-obvious implementation decisions, each of which was load-bearing:
    size produces negative concentrations or oscillation. A midpoint predictor–corrector
    makes it second order. One 150-row evaluation is ~22 ms at 512 substeps.
    **Do not replace this with fixed-step RK4** — RK4 blew up on thermal-runaway rows.
-3. **`residuals()` poisons parameter sets whose integration has not converged**, by
-   re-integrating at half resolution and rejecting on disagreement > 0.05. Without this the
+3. **`residuals()` can poison parameter sets whose integration has not converged**, by
+   re-integrating at half resolution and rejecting on disagreement > 0.05. Without it the
    optimizer minimizes *integration error* instead of data error: an early fit produced
    parameters whose predictions moved 92 yield-points when substeps were increased.
    The `a1`/`a2` bounds of ±30 K·L/mol exist for the same reason (caps each reaction's
    adiabatic excursion at ~120 K given CA0 ≤ 3.97).
+
+   **The guard defaults OFF and must be passed explicitly (`convergence_tol=CONVERGENCE_TOL`)
+   — do that only at differential-evolution call sites.** It is a cliff in an otherwise
+   smooth objective, so a `least_squares` finite-difference Jacobian straddling it is
+   garbage. It fires 159/256 times around the optimum; leaving it on during polish costs
+   4.38 instead of 3.66 and wrecked 18 of 24 polish starts.
 
 `reference_solve()` is the independent scipy BDF check — keep `check_integrator.py` passing
 after any change to the integrator.
@@ -130,14 +136,22 @@ Harmless, but state it rather than let a judge find it.
 | corr(`concentration_mol_L`, yield) | +0.009 |
 | corr(`log_tau`, yield) | +0.061 |
 | ExtraTrees + physics features, repeated 10-fold | 16.37 ± 1.38 |
-| Physics ODE, train (all 150 rows) | **3.6617** |
-| Physics ODE, warm-started CV | 3.662 ± 0.000 — **optimistic, do not quote** |
-| Physics ODE, cold-start held-out folds | 2.97 / 13.05 / 1.93 |
+| Physics ODE, train (all 150 rows, 2048 substeps) | **3.6559** |
+| Physics ODE, repeated 10-fold CV | **6.358 ± 0.124** |
+| Physics ODE, cold-start held-out folds | 2.97 / 13.05 / 1.93 (mean 5.98) |
+| **Shipped blend, 0.91 physics + 0.09 tree** | **5.711 OOF** |
 
-**The `± 0.000` is an artifact, not a stability result.** `make_physics_predict_fn`
-warm-starts each fold's `least_squares` from the full-data optimum, so on 135 of 150 rows
-the "refit" barely moves and OOF collapses onto train RMSE. A zero seed-to-seed spread
-means the folds were not independent of the rows they were scored on.
+The warm-started CV and the cold folds agree at ~6.0, which is the honest generalization
+estimate. An earlier run reported 3.662 ± 0.000; that was a bug (see the guard note above),
+not a result.
+
+**The `± 0.000` was an artifact, not a stability result — and it had two causes.**
+`make_physics_predict_fn` warm-starts each fold's `least_squares` from the full-data
+optimum, so on 135 of 150 rows the "refit" barely moves. Worse, that early run had the
+convergence guard on by default, and the guard fires 159/256 times in exactly that
+neighbourhood — so the folds hit the poison wall immediately and could not move at all.
+Not near-zero movement: zero. A zero seed-to-seed spread means the folds were not
+independent of the rows they were scored on.
 `check_cold_folds.py` refits with differential evolution from scratch and is the honest
 protocol. Use it before quoting any generalization number.
 
@@ -157,10 +171,20 @@ Recovered: E1 = 43.2, E2 = 250.1 kJ/mol, a1 = −11.79, a2 = +11.34 K·L/mol, U 
 `check_bounds.py` refit with the box widened to E1∈[5,400], E2∈[20,600] and landed on the
 same values with nothing at a constraint — the activation energies are real, not artifacts.
 
-Blend search returned **w = 0.992** on physics, i.e. the tree adds nothing. The brief's
-suggested fixed 70/30 would have scored **5.96 vs 3.66** — do not use it.
-Residual correction was measured at every shrinkage and gains ≤0.009 (within seed noise);
-the residual is not learnable by a tree (4.38 → 4.25 OOF). Skip that stage.
+Blend search returns **w = 0.910** on physics. This is a real gain, not weight-fitted noise:
+leave-one-seed-out (choose w on two seeds, score on the third) gives **+0.241 RMSE**
+consistently across all three, and w is stable at 0.878–0.919. The brief's fixed 70/30 still
+loses (6.727 vs 5.711) — the point is to *search* the weight, not to avoid blending.
+
+The tree's 9% is not vague "insurance": it is 2.8× less accurate overall but its errors are
+differently distributed, so a small weight cancels part of the ODE's systematic bias before
+the tree's own larger error dominates.
+
+`make_submission.py` blends by default (`--no-blend` for pure physics) and averages the tree
+over seeds 0–2 to match the estimator the weight was chosen against.
+
+Residual correction (`src/residual.py`) gains ≤0.05 at every shrinkage — the residual is not
+learnable by a tree (4.38 → 4.25 OOF). Not used.
 
 `guide.md` is a team brief, not ground truth — three of its checkable claims are wrong:
 it says 18% of rows exceed yield 90 (actually 12%), that test ranges sit inside train

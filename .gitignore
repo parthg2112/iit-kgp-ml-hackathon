@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+
+# Smoke/scratch fit outputs; the real results are committed.
+artifacts/smoke*
+artifacts/*.log

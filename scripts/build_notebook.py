@@ -363,7 +363,7 @@ tree = np.mean([fit_predict(train, test, seed=s) for s in (0, 1, 2)], axis=0)
 w = blend["weight"]
 final = np.clip(w * phys + (1 - w) * tree, 0, 100)
 
-path = write_submission(final, "Claude ke Chatore")
+path = write_submission(final, "claude_ke_chatore")
 print(f"wrote {path.name}: {len(final)} rows, w={w:.3f} physics")
 print(f"  range [{final.min():.3f}, {final.max():.3f}], mean {final.mean():.3f}")
 pd.read_csv(path).head()

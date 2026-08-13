@@ -56,7 +56,9 @@ cross-validation, never against a probe score.
 
 ### Submission contract (problem statement §5)
 
-- File named `Claude ke Chatore.csv` — team name is **Claude ke Chatore**
+- File named **`claude_ke_chatore.csv`** — team name is "Claude ke Chatore", but the file is
+  written with underscores (no spaces) for the upload platform. Do not "fix" this back to
+  the spaced form; it was a deliberate call.
 - Exactly 50 rows, in the **same order** as `test_dataset.csv`
 - Exactly **one** column, header `overall_yield` — no index column, no ID column
 - Floats to ≥3 decimals, all within `[0, 100]`

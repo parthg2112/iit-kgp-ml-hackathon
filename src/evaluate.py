@@ -86,8 +86,11 @@ def make_physics_predict_fn(x_start, n_steps: int = DEFAULT_STEPS) -> PredictFn:
 # predictions toward the training mean -- measured as a one-directional loss
 # (97.7 -> 96.6, 93.0 -> 91.8, 95.1 -> 94.7). Below the cutoff, near the yield
 # cliff, the ODE carries its largest bias and local interpolation genuinely helps.
-# Validated leave-one-seed-out: 6.022 vs 6.105 for a flat blend, better on all
-# three held-out seeds.
+#
+# The cutoff came out at 60 in every leave-one-seed-out fold. It is now validated as
+# part of the shipped triple (sigma, w, cutoff) = (1.67, 0.87, 60), LOSO 5.671 vs
+# 6.022 for the previous policy, better on all three held-out seeds. (The 6.022 above
+# is the SUPERSEDED policy's LOSO -- kept here only as the comparison point.)
 BLEND_CUTOFF = 60.0
 
 

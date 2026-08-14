@@ -1,8 +1,13 @@
 """Build the single submission file.
 
-Default is physics-only. Pass --blend to mix in the ExtraTrees safety net at a
-weight read from artifacts/blend.json (produced by run_blend_search.py); the
-weight is chosen by minimizing out-of-fold RMSE, never by a gut number.
+Ships the regime-aware blend by default; --no-blend gives pure physics.
+
+The policy triple (sigma, weight, cutoff) = (1.67 K, 0.87, 60) is read from
+artifacts/blend.json, which is written by scripts/joint_policy.py. All three are
+chosen JOINTLY on out-of-fold RMSE -- never a gut number -- and sigma is fixed a
+priori at the errors-in-variables median rather than tuned on the CV that judges
+it. Leave-one-seed-out on the whole triple: 5.671 vs 6.022 for the previous
+policy, better on all three held-out seeds.
 """
 
 import argparse

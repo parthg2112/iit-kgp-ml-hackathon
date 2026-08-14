@@ -112,7 +112,9 @@ def main() -> int:
         _, _, wa_i, ca_i = best_triple(y, oof, tree, others, sigmas=[EIV_SIGMA])
         held_joint = rmse(y, apply_blend(oof[s_i][i], tree[i], w_i, c_i))
         held_apri = rmse(y, apply_blend(oof[EIV_SIGMA][i], tree[i], wa_i, ca_i))
-        # current shipped policy: unsmoothed physics, w=0.910, cutoff=60
+        # PREVIOUS policy (superseded by this script's own result): unsmoothed
+        # physics, w=0.910, cutoff=60. Kept as the comparison baseline; the
+        # shipped policy is (sigma, w, cutoff) = (1.67, 0.87, 60) in blend.json.
         held_base = rmse(y, apply_blend(oof[0.0][i], tree[i], 0.910, 60.0))
         pure_sm = rmse(y, oof[EIV_SIGMA][i])
         rows.append((held_base, held_joint, held_apri, pure_sm, s_i, w_i, c_i))

@@ -1,8 +1,15 @@
 """Generate notebook/final.ipynb — the documented workflow finalists must submit.
 
-The notebook imports src/ rather than duplicating logic, and reads results from
-artifacts/ at execution time, so "Run All" always reproduces the current numbers
-instead of quoting stale ones baked into markdown.
+The notebook must be SELF-CONTAINED: a judge runs the .ipynb, and one that imports
+from src/ will not execute for them. So `embed()` below inlines the *real* source of
+the tested functions via inspect.getsource, which keeps the notebook standalone
+without letting it drift from the code check_integrator.py validates. Do not
+"simplify" it back to imports.
+
+Results are read from artifacts/ at execution time rather than baked into markdown,
+so "Run All" reproduces current numbers instead of quoting stale ones. The prediction
+policy (sigma, weight, cutoff) is read from artifacts/blend.json for the same reason:
+it was once hardcoded, and a stale sigma silently rewrote the submission on re-execution.
 """
 
 import inspect
@@ -316,6 +323,15 @@ convergence guard in our residual function was firing throughout that neighbourh
 folds could not move away from the starting point at all. The folds were therefore not
 independent of the rows they were scored against. We fixed the guard and re-ran the whole
 exercise from a genuinely cold start in section 4b — those are the numbers we stand behind.
+
+**Naming the protocols once, because they are not comparable.** `train` = fit and scored on
+all 150 rows. `10f-CV` = repeated 10-fold, parameters refit per fold. `cold` = folds refit
+by differential evolution from scratch. `LOSO` = the prediction policy chosen on two seeds
+and scored on the third — the only figure that prices hyper-parameter selection, and the
+number we quote for the shipped model: **LOSO 5.671**, against 6.022 for the policy it
+replaced, better on all three held-out seeds.
+
+### 4a. The baseline we had to beat
 """),
     code("""
 blend = json.loads((ART / "blend.json").read_text())
@@ -400,8 +416,10 @@ for i in range(P.shape[0]):
 print(f"\\nmean out-of-sample gain: {np.mean(gains):+.3f} RMSE")
 """),
     md("""
-The gain is consistent across every held-out seed and the weight is stable (0.88–0.92), so
-this is a real improvement rather than a weight fitted to noise.
+The gain is consistent across every held-out seed, and the weight sits on a **broad plateau
+rather than a sharp peak** — the gain is 0.281 / 0.279 / 0.271 at w = 0.87 / 0.85 / 0.89,
+falling off only below 0.80. So this is a real improvement, not a weight fitted to noise.
+The shipped value is **w = 0.87**, chosen jointly with σ and the cutoff (section 7).
 
 What is the tree contributing? We tested the obvious explanation — that it corrects local
 bias in the ODE — and it **failed twice, on two different strata**.
@@ -496,6 +514,8 @@ split for the test rows: that requires labels we do not have.)
 ## 5. Model selection: what we tested and rejected
 
 Each alternative below was **fitted and measured**, not dismissed by argument.
+
+### 5a. Competing model forms
 """),
     code("""
 mc = json.loads((ART / "model_comparison.json").read_text())
@@ -512,12 +532,12 @@ for name, r in sorted(mc.items(), key=lambda kv: kv[1]["train_rmse"]):
 - **Tanks-in-series** tested whether axial dispersion matters. At *fixed* parameters the
   entire effect is worth ~0.08 RMSE; the larger apparent gain from refitting was the
   optimizer exploiting the coarse cascade's discretization error, not physics. Rejected.
-- **A parallel $A \\to C$ path** was tested by fitting it, not argued away. Our first
-  reasoning was *wrong* and we record it: "yields reach 99.97%, so a parallel path is
-  excluded" only bounds $k_3/(k_1+k_3) < 0.0003$ **at that row's 383 K**, while the data
-  spans 363–516 K — and $k_3$ carries its own activation energy. Locally true, globally
-  invalid. Fitted properly with $\\ln k_{3,ref}$ and $E_3$ free, $\\ln k_3$ drives to its
-  lower bound and cross-validated RMSE moves by 0.0003. Rejected on measurement.
+- **A parallel $A \\to C$ path.** The problem statement calls the network *"series-parallel"*
+  while listing only $A \\to B \\to C$, so we fitted the parallel path rather than assume
+  either reading. Adding $\\ln k_{3,ref}$, $E_3$ and $a_3$ buys **+0.0019** train RMSE
+  (3.6540 vs 3.6559) for three extra parameters, while 10-fold CV over three seeds gets
+  **worse — 6.7103 vs 6.3579** — and unstable, swinging 5.41 / 8.13 / 6.59. Negligible train
+  gain with degraded generalization is what fitting noise looks like. **Rejected.**
 
 ### Tested and priced, not merely skipped
 
@@ -608,6 +628,8 @@ average over — which is itself the robustness claim.
 ## 6. What the recovered parameters mean
 
 This is the part a feature-importance bar chart cannot give you.
+
+### 6a. The crossover temperature, and why it is the operating limit
 """),
     code("""
 T = np.linspace(340, 560, 2000)
@@ -658,7 +680,9 @@ print(f"at mean CA0 = {ca0:.2f} mol/L, adiabatic swings: {p.a1*ca0:+.0f} K then 
 print(f"net: {(p.a1 + p.a2)*ca0:+.1f} K  <- the near-cancellation")
 """),
     md("""
-## 6b. Where the remaining error actually lives
+### 6b. Where the remaining error actually lives
+
+#### 6b-i. It is concentrated, not spread
 
 Aggregate RMSE hides the structure of the problem. Grouping rows by how much the *training
 data itself* disagrees locally — the spread of yields among each row's six nearest
@@ -696,7 +720,7 @@ uniform four-point offset; it is a handful of badly-missed rows, which is the 29
 decomposition appearing again rather than a separate systematic bias. This is a genuine
 locality where our model is weakest, and it is where the blend of section 4 earns its keep.
 
-### 6b-ii. And that remaining error is input noise, not missing physics
+#### 6b-ii. And that remaining error is input noise, not missing physics
 
 The obvious reading of a 3.66 plateau is "there is physics we have not found". We tested
 that and it is wrong. Grouping rows by how sensitive the predicted yield is to temperature —
@@ -758,7 +782,7 @@ forces the residual orthogonal to ∂f/∂θ, so a small mean residual is a prop
 optimizer, not a finding about noise.
 """),
     md("""
-### 6b-ii-b. What noise-averaging costs, stated plainly
+#### 6b-ii-b. What noise-averaging costs, stated plainly
 
 Averaging over the input distribution is not free. It slightly worsens one boundary: the edge
 of the dead regime, where a row sitting just off zero gets lifted. The worst case in our
@@ -775,14 +799,14 @@ dead-regime guard to suppress it: that would be a third tuned rule bolted onto a
 that is already physically justified, and we have spent this project removing exactly that
 pattern.
 
-### 6b-iii. So how much of the final score is luck?
+#### 6b-iii. So how much of the final score is luck?
 
 Bootstrapping 50-row draws from our out-of-fold predictions gives the distribution of scores
 a 50-row test set could hand us: median **5.57**, 5th–95th percentile **[2.41, 9.07]**. Any
 single-digit gap between well-built models on 50 rows is mostly sampling.
 """),
     md("""
-## 6c. An independent audit, and how we settled it
+### 6c. An independent audit, and how we settled it
 
 An external reviewer fit their own physics model and disputed five of our test predictions.
 Rather than split the difference, we decided each against the training data.
@@ -888,11 +912,16 @@ and the Arrhenius form from data; ours has them built in. That is why the physic
 cross-validated error sits essentially on top of its training error while the tree's does
 not.
 
-**Speed.** The fitted system evaluates all 50 test conditions in **milliseconds**, against
-minutes per run for the reference CFD/BVP simulation — fast enough for a real-time control
-loop, which is what the surrogate was wanted for in the first place. And because the
-parameters are physical, an engineer can sanity-check them against known kinetics instead
-of trusting a black box.
+**Speed, measured.** All 150 training conditions integrate in **24.8 ms** at 512 substeps
+(102 ms at the 2048 substeps used for the submission), against **5573 ms** for a SciPy BDF
+solve of the same system — a **225x** speed-up, with the two agreeing to 0.017 yield-points.
+
+We deliberately do *not* quote a runtime for the original simulation: the problem statement
+describes it only as *"computationally expensive and too slow for real-time plant
+optimization"* and never publishes a number, so our comparison is against a reference solver
+we timed ourselves. Either way the surrogate is comfortably inside a real-time control loop,
+which is what it was wanted for. And because the parameters are physical, an engineer can
+sanity-check them against known kinetics instead of trusting a black box.
 """),
 ]
 

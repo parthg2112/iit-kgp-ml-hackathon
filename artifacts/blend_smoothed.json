@@ -4,5 +4,6 @@
   "cutoff": 60.0,
   "oof_rmse": 5.434558448830408,
   "pure_smoothed_oof": 5.597459673815831,
-  "blend_gain_loso": 0.18544291730076998
+  "blend_gain_loso": 0.18544291730076998,
+  "SUPERSEDED": "Superseded by artifacts/blend.json. Shipped policy is (sigma, w, cutoff) = (1.67, 0.87, 60), LOSO 5.671. The oof_rmse field here is bit-identical to blend.json's and was copied, not measured for this policy -- do not quote it."
 }

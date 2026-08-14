@@ -4,14 +4,34 @@ IIT-KGP ML Hackathon: predict `overall_yield` of product B from five reactor ope
 conditions. 150 training rows, 50 test rows, scored on RMSE. **One submission, no
 leaderboard feedback.**
 
-**Approach in one line:** we did not fit a regressor — we recovered the reactor's governing
-differential equations and fitted their seven physical parameters.
+**Approach in one line:** we did not fit a regressor to the target — we recovered the
+reactor's governing differential equations and fitted their seven physical parameters. A
+13% weight on an ExtraTrees model rides along for variance reduction; the mechanism is the
+ODE.
 
-| Model | RMSE |
-|---|---|
-| Best tree ensemble (ExtraTrees + physics features) | 16.37 |
-| **Physics ODE, cross-validated** | **6.36** |
-| Physics ODE, training fit | 3.66 |
+### What ships
+
+`claude_ke_chatore.csv`, built by `scripts/make_submission.py` from the policy triple
+**(σ, w, cutoff) = (1.67 K, 0.87, 60)** stored in `artifacts/blend.json`: physics predictions
+noise-averaged over σ = 1.67 K, blended 0.87/0.13 with the tree below a predicted yield of
+60, pure physics above.
+
+**Every number below carries its protocol — they are not comparable.**
+`train` = fit and scored on all 150 rows. `10f-CV` = repeated 10-fold, parameters refit per
+fold. `LOSO` = policy chosen on two seeds and scored on the third — the only figure that
+prices hyper-parameter selection, and the one to quote.
+
+| Model | Protocol | RMSE |
+|---|---|---|
+| Best tree ensemble (ExtraTrees + physics features) | 10f-CV | 16.37 ± 1.38 |
+| Physics ODE, raw | 10f-CV | 6.36 ± 0.12 |
+| Physics ODE, noise-averaged σ=1.67 | 10f-CV | 5.94 |
+| Previous policy (raw, w=0.910) | LOSO | 6.022 |
+| **SHIPPED: σ=1.67, w=0.87, cutoff=60** | **LOSO** | **5.671** |
+| Physics ODE, training fit (2048 substeps) | train | 3.6559 |
+
+A 50-row test set carries large sampling noise on top of any of these: bootstrapping the
+out-of-fold predictions gives a 5th–95th percentile of **[2.41, 9.07]**.
 
 ---
 

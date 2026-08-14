@@ -184,7 +184,8 @@ on two seeds and scored on the third (the only figure that prices hyper-paramete
 | Quantity | Protocol | Value |
 |---|---|---|
 | ExtraTrees + physics features | 10f-CV | 16.37 ± 1.38 |
-| Physics ODE, raw | train | 3.6559 |
+| Physics ODE, raw | train @2048 substeps | 3.6559 |
+| Physics ODE, raw | train @512 substeps | 3.6617 |
 | Physics ODE, raw | 10f-CV | 6.358 ± 0.124 |
 | Physics ODE, raw | cold | 2.97 / 13.05 / 1.93 (mean 5.98) |
 | Physics ODE, noise-averaged σ=1.67 | 10f-CV | 5.935 |
@@ -219,8 +220,11 @@ ratio k2/k1 stays stable (0.063–0.079) regardless.
 Note `check_cold_folds.py` overwrites `artifacts/cold_folds.json` with however many folds
 it was asked for — re-run with the same `--folds` before regenerating the notebook.
 
-Final model: `series` (7 free parameters, `n_flow` pinned to 0), train RMSE 3.6617.
-Recovered: E1 = 43.2, E2 = 250.1 kJ/mol, a1 = −11.79, a2 = +11.34 K·L/mol, U = 3.26.
+Final model: `series` (7 free parameters, `n_flow` pinned to 0), train RMSE **3.6617 at 512
+substeps / 3.6559 at 2048** — always state which, they differ in the third decimal and both
+appear in the artifacts. Recovered: E1 = 43.16, E2 = 250.07 kJ/mol, a1 = −11.79,
+a2 = +11.34 K·L/mol, U = 3.2552. The k1 = k2 crossover sits at **449.9 K**, inside the
+training temperature envelope of 351.6–548.0 K (`scripts/pitch_evidence.py`).
 `check_bounds.py` refit with the box widened to E1∈[5,400], E2∈[20,600] and landed on the
 same values with nothing at a constraint — the activation energies are real, not artifacts.
 
@@ -270,8 +274,17 @@ the bias; the whole-set headline is the per-seed **5.9352 → 5.6541**. The trad
 taking, but it is a weaker footing than bias correction would have been and should be stated
 that way.
 
-Per-band breakdown (seed-averaged predictions; the RMSE headline stays the per-seed
-**5.9352 → 5.6541, +0.2811**, which is the protocol the docs and LOSO use):
+Per-band breakdown (seed-averaged predictions). **Three different numbers describe this
+policy and they are not interchangeable — always name the protocol:**
+
+| Number | Protocol | What it is |
+|---|---|---|
+| **5.671** | **LOSO** | **the headline: policy chosen on two seeds, scored on the third** |
+| 5.9352 → 5.6541 | 10f-CV, per seed then averaged | the blend's gain with the policy held fixed |
+| 6.142 → 5.807 | 10f-CV, blended rows only | the subset used to price the introduced bias |
+
+LOSO is the only one that prices hyper-parameter selection, so it is the number that goes in
+front of a judge. The per-seed pair below is *not* LOSO.
 
 | Band | n | mean pull | applied | needed | band RMSE gain |
 |---|---|---|---|---|---|
@@ -435,7 +448,7 @@ Each was fitted and measured, not argued away:
 |---|---|
 | Flow-dependent jacket U, `(Q/Q_ref)^n` | n ≈ −0.03, inactive; +0.015 RMSE for one extra param |
 | Thermally neutral reactions | 8.27 vs 3.66 — clearly worse |
-| Parallel A→C path | **This earlier reasoning was wrong** — see the correction below. Being retested properly |
+| Parallel A→C path | **Now measured** (`scripts/pitch_evidence.py`). Fitted with `ln_k3_ref, E3_kJ, a3` free: train 3.6540 vs 3.6559 — 3 extra parameters buy **+0.0019**. 10f-CV over 3 seeds is **6.7103 vs 6.3579, i.e. −0.352 worse**, and unstable (5.41 / 8.13 / 6.59). Rejected on generalization |
 | Axial dispersion (tanks-in-series) | At *fixed* params worth only ~0.08 RMSE. Larger apparent gains came from refitting against the coarse cascade's discretization error — same failure mode as the step-drift bug |
 
 The self-recovery test in `diagnose_fit.py` is the tool that made these calls trustworthy:
@@ -444,12 +457,33 @@ it regenerates targets from the fitted parameters and refits from scratch. It re
 before concluding "the search failed" or "the model needs another parameter" — those two
 look identical without it.**
 
-### Correction: the A→C rule-out was invalid
+### Correction: the A→C rule-out was invalid, and so was its replacement
 
-"Yields reach 99.97%, so a parallel path is excluded" only bounds `k3/(k1+k3) < 0.0003`
-**at that row's temperature of 383 K**, while the data spans 363–516 K. Since k₃ carries its
-own activation energy it can be negligible at 383 K and significant at 516 K. The argument
-was locally true and globally invalid.
+**The original argument.** "Yields reach 99.97%, so a parallel path is excluded" only bounds
+`k3/(k1+k3) < 0.0003` **at that row's temperature of 383 K**, while training temperatures
+span 351.6–548.0 K. Since k₃ carries its own activation energy it can be negligible at 383 K
+and significant at 548 K. Locally true, globally invalid — a *lucky assertion*, not a
+measurement. It reached the right conclusion by an argument that does not support it.
+
+**The replacement prose was also wrong.** For a while the notebook asserted "ln k₃ drives to
+its lower bound and cross-validated RMSE moves by 0.0003, every other parameter unchanged to
+8 significant figures." No artifact ever backed it, and when finally measured
+(`scripts/pitch_evidence.py`) **all three details were false**: ln_k₃ lands at −7.16 on one
+DE seed and −11.65 on another (bound is −12, so not reliably at it), the CV delta is
+**−0.352, not 0.0003**, and E₂ shifts by 1.08 kJ/mol with a₂ by 0.286 — not eight-figure
+agreement.
+
+**What is actually true, and it is a better argument.** The fitted A→C model buys **+0.0019**
+train RMSE for three extra parameters (3.6540 vs 3.6559) while 10-fold CV over three seeds
+gets **worse: 6.7103 vs 6.3579**, swinging 5.41 / 8.13 / 6.59 across seeds. Negligible train
+gain plus degraded, unstable generalization is the signature of parameters fitting noise. The
+data supports the series network.
+
+Worth stating in the pitch: the problem statement itself calls the network *"series-parallel"*
+while listing only A→B→C. We tested the parallel path rather than assuming either reading.
+The A→C integrator is exact, not an approximation — A decays at `kA = k1 + k3` while B is
+produced at `k1`, so the analytic step generalises; it reduces to the shipped model to
+**5.2e-12** yield-points at k₃→0 and agrees with scipy BDF to **9.1e-04** with k₃ active.
 
 ## Input noise: what is measured, what is inferred
 

@@ -119,18 +119,75 @@ report a gain measured at its own optimum.
 **Regime-aware blend:** mix below a predicted yield of 60, pure physics above. A single
 global weight hid a defect — the tree helps in a narrow band and hurts at both ends.
 
-| Band | n | mean pull | applied | needed | band RMSE gain |
+### 5a. Reconciled accounting — where the gain actually comes from
+
+**RMSE is not additive; squared error is.** Per-band RMSE deltas cannot be summed, and
+reading them as contributions is what produced an earlier claim in this package that "the
+entire gain comes from 13 rows." **That claim was wrong.** The table below does the
+accounting in SSE, where the band contributions sum to the total by construction.
+
+Basis: pooled over 3 seeds × 150 rows = 450 predictions, which is the basis that closes
+exactly. (The headline `5.9352 → 5.6541` is per-seed RMSE then averaged; pooling gives
+`5.9355 → 5.6547`. Averaging RMSEs is not the same as pooling SSE, so the two differ in the
+third decimal. Both are correct; they answer slightly different questions.)
+
+| Band | n | RMSE pre | RMSE post | ΔRMSE | SSE pre | SSE post | **ΔSSE** | **% of gain** |
+|---|---|---|---|---|---|---|---|---|
+| dead, p ≤ 0.5 | 168 | 0.366 | 1.960 | **-1.594** | 22.6 | 645.4 | **-622.9** | **-42.5%** |
+| low, 0.5 < p ≤ 10 | 39 | 11.210 | 9.580 | +1.630 | 4900.5 | 3579.2 | **+1321.3** | **+90.2%** |
+| mid, 10 < p ≤ 60 | 86 | 9.441 | 8.957 | +0.484 | 7665.0 | 6899.1 | **+765.9** | **+52.3%** |
+| above cutoff, p > 60 | 157 | 4.561 | 4.561 | 0.000 | 3265.4 | 3265.4 | 0.0 | 0.0% |
+| **TOTAL** | **450** | **5.935** | **5.655** | **+0.281** | **15853.4** | **14389.1** | **+1464.3** | **100%** |
+
+Closure residual: **4.6e-13**. Reproduce with `python scripts/blend_accounting.py`.
+
+**What this corrects.** The mid band is a *major* positive contributor — **+52.3%** of the
+gain — despite a small RMSE delta, because it holds 86 rows with a large baseline error
+(RMSE 9.44). The low band supplies 90.2%, and the dead band gives back 42.5%. The gain is
+**not** confined to 13 rows.
+
+**On the dead band, stating the level not just the delta.** Slice RMSE goes from **0.366 to
+1.960** — the blend makes those rows worse by **1.594 RMSE**, costing **622.9 SSE**. Earlier
+wording ("loses -1.55 RMSE") was ambiguous between a delta and a level; it is a delta.
+
+### 5b. Why the mean misleads on the gain-carrying band
+
+The 0.5 < p ≤ 10 band has mean need **+3.99** but median **+0.70**. It is heavily
+right-skewed, and squared error is tail-dominated:
+
+| |need| quantile | p50 | p75 | p90 | max |
 |---|---|---|---|---|---|
-| dead, p ≤ 0.5 | 56 | +5.92 | +0.77 | +0.13 | **-1.55** |
-| low, 0.5 < p ≤ 10 | 13 | +25.28 | +3.29 | +4.34 | **+1.74** |
-| mid, 10 < p ≤ 60 | 29 | +5.38 | +0.70 | -2.41 | +0.23 |
+| yield points | 1.46 | 3.70 | 21.88 | 38.17 |
 
-The entire gain is 13 rows.
+**The top 3 of 39 rows supply 1016 of the band's 1321 SSE improvement (77%).** The five
+largest are rows the physics puts near zero while truth is 28–39:
 
-**The tree is variance reduction, not bias correction.** Sign test on the band carrying the
-gain: **8** of **13** aligned (62%, p = **0.581**) against a pre-registered bar of ≥ 11/13.
-Per seed 7/12, 9/13, 9/14 — none clears it. Correlation between physics error and tree error
-is **+0.070**; the tree scores **15.04** standalone on those rows against 6.14 for physics.
+| y | physics | tree | blended | err pre | err post | ΔSSE |
+|---|---|---|---|---|---|---|
+| 28.73 | 5.160 | 87.86 | 15.911 | +23.57 | +12.82 | +391.3 |
+| 38.84 | 0.671 | 38.27 | 5.559 | +38.17 | +33.28 | +349.3 |
+| 38.84 | 4.497 | 37.45 | 8.781 | +34.34 | +30.06 | +275.9 |
+| 38.84 | 5.861 | 40.25 | 10.332 | +32.98 | +28.51 | +274.9 |
+| 28.73 | 7.275 | 66.66 | 14.995 | +21.46 | +13.74 | +271.7 |
+
+This is the skew that reconciles the arithmetic: a mean need of ~+4 alongside an SSE gain
+that implies much larger per-row errors. Both are true because a handful of cliff rows carry
+errors of 20–38 yield-points.
+
+**The tree: what we can and cannot demonstrate.** We could not demonstrate bias correction
+at our pre-registered bar — sign test on the gain-carrying band gives **8** of **13** aligned
+(62%, p = **0.581**) against a bar of ≥ 11/13, and per seed 7/12, 9/13, 9/14, none clearing
+it.
+
+**This is a failure to demonstrate, not a demonstration of absence.** At n = 13 the sign test
+only has power against a very large effect, and the *magnitude* evidence points the other
+way: the tree supplies **+3.29** where **+4.34** is needed — same sign, about 76% of the
+required correction. We cannot separate that from variance reduction at this sample size, so
+we claim the weaker interpretation and say so explicitly.
+
+What is measured either way: correlation between physics error and tree error is **+0.070**,
+and the tree scores **15.04** standalone on those rows against 6.14 for physics — a weak,
+decorrelated component, which is exactly what improves an ensemble by averaging.
 
 *Beware `corr(tree - physics, y - physics)`* — both share the `- physics` term, so it reads
 **+0.389** and is spuriously high. We report it here only to say we did not use it. The sign

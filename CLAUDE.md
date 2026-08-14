@@ -292,10 +292,26 @@ front of a judge. The per-seed pair below is *not* LOSO.
 | low, 0.5 < p ≤ 10 | 13 | +25.28 | +3.29 | +4.34 | **+1.741** |
 | mid, 10 < p ≤ 60 | 29 | +5.38 | +0.70 | −2.41 | +0.232 |
 
-The whole gain is 13 rows. The blend **loses 1.547** on the 56 dead rows — the largest
-stratum — and that is the honest cost, not a footnote. Note the tree also reaches the
-near-zero rows (+0.77 applied vs +0.13 needed), so it is a second contributor to the lifted
-dead-edge row alongside smoothing.
+**"The whole gain is 13 rows" was WRONG — do not repeat it.** Per-band *RMSE deltas are not
+additive* and reading them as contributions is the error. Redone in SSE, which is additive
+(`scripts/blend_accounting.py`, pooled over 3 seeds × 150 rows = 450 predictions, closure
+residual 4.6e-13):
+
+| Band | n | RMSE pre → post | ΔSSE | % of gain |
+|---|---|---|---|---|
+| dead, p ≤ 0.5 | 168 | 0.366 → 1.960 | **−622.9** | **−42.5%** |
+| low, 0.5 < p ≤ 10 | 39 | 11.210 → 9.580 | +1321.3 | +90.2% |
+| mid, 10 < p ≤ 60 | 86 | 9.441 → 8.957 | +765.9 | **+52.3%** |
+| above cutoff | 157 | unchanged | 0.0 | 0.0% |
+| **TOTAL** | **450** | **5.935 → 5.655** | **+1464.3** | **100%** |
+
+The mid band contributes **half the gain**, despite a small RMSE delta, because it holds 86
+rows at a baseline RMSE of 9.44. And the low band's gain is **tail-dominated**: the top 3 of
+39 rows supply **77%** of it, with pre-blend errors of 21–38 yield-points against a band
+median |need| of only 1.46.
+
+**State the dead-band cost as a level, not just a delta:** slice RMSE **0.366 → 1.960**
+(delta −1.594, cost 622.9 SSE). "Loses 1.55 RMSE" is ambiguous between the two.
 
 **Do not quote the dead band's sign test (17/56, p = 0.005) as a finding — it is
 near-tautological.** The tree's pull is positive on **56 of 56** dead rows (a tree cannot
@@ -339,11 +355,14 @@ distribution, so it is a qualifying clause, never a headline.
 
 ### Answer ready for "why is there a random forest inside your physics model?"
 
-> Our ODE misses low in the 0.5–10% yield band — median about a point, mean about four
-> because a few rows are badly missed. A 13% weight on a decorrelated tree recovers roughly
-> three-quarters of that mean. In the mid-range it is wrong-signed and costs us, on the dead
-> rows it costs us 1.5 RMSE, and overall it introduces +1.08 of bias. We keep it because the
-> net is +0.27 across all three held-out seeds on a plateau in w, and because we tested the
+> Our ODE misses low in the 0.5–10% yield band — median about a point, mean about four,
+> because a few cliff rows are badly missed. A 13% weight on a decorrelated tree recovers
+> roughly three-quarters of that mean. We could not demonstrate that this is bias correction
+> at our pre-registered bar — 8 of 13 on the sign test against a bar of 11 — and at n = 13
+> that test only detects a very large effect, so we claim the weaker interpretation: variance
+> reduction from a decorrelated component. The cost is real: on the near-zero rows slice RMSE
+> goes 0.37 to 1.96, and overall it introduces +1.08 of bias. We keep it because the net is
+> +0.27 across all three held-out seeds on a plateau in w, and because we tested the
 > principled alternative — bagging the physics fit — which recovered only +0.13 and
 > destabilised one seed.
 

@@ -38,9 +38,14 @@ unconverted and high tau destroys B, so both tails are low-yield and the linear 
 cancels.
 
 **7. What is the single most useful number for a plant operator?**
-The crossover temperature **449.9 K** — below it the reactor makes B faster than it destroys
-it, above it selectivity collapses — and it sits inside the observed range of 351.6–548.0 K,
-so it is interpolated.
+The crossover temperature **449.9 K**, where k₂ overtakes k₁ — but state it as a joint
+(T, τ) condition, not a ceiling: above it *every additional unit of residence time costs
+selectivity*, so τ must be actively shortened rather than temperature simply capped.
+
+**7b. So can the reactor run above 449.9 K?**
+Yes, and our own data proves it — **49 training rows sit above the crossover and one reaches
+75% yield**, because at short residence time B exits before it degrades; we predict **54.3%**
+for a test row at 487.9 K with τ = 0.066.
 
 **8. Is E1 = 43 kJ/mol physically plausible?**
 Yes, it is a typical liquid-phase value; the informative result is the *ratio*
@@ -108,13 +113,21 @@ averaging — correlation between its errors and the physics errors is **+0.070*
 scores **15.04** standalone against 6.14 for physics on the same rows.
 
 **20. Isn't it correcting your ODE's bias?**
-We tested exactly that and it failed — in the band carrying the entire gain the tree's pull
-agrees with the needed direction on **8** of **13** rows (62%, p = **0.581**) against a
-pre-registered bar of 11/13.
+We could not demonstrate that at our pre-registered bar — 8 of 13 on the sign test against a
+bar of 11/13 — though that is a failure to demonstrate rather than a demonstration of
+absence, since at n = 13 the test only detects a very large effect and the magnitude is
+directionally aligned (+3.29 supplied, +4.34 needed), so we claim the weaker interpretation.
 
 **21. What does the blend cost you?**
-It introduces **+1.083** of upward bias on the blended rows and loses **-1.55** RMSE on the
-56 near-zero rows; we keep it because the net is +0.27 across all three held-out seeds.
+On the 168 near-zero predictions slice RMSE goes **0.366 → 1.960** (a delta of -1.594,
+costing 622.9 SSE) and it introduces **+1.083** of upward bias on the blended rows; we keep
+it because the net is +0.27 across all three held-out seeds.
+
+**21b. Your band numbers don't obviously add up to the total gain. Do they?**
+They do, once you do it in squared error rather than RMSE — pooled over 3 seeds the ΔSSE is
+low band +1321.3, mid band +765.9, dead band -622.9, summing to **+1464.3** with a closure
+residual of 4.6e-13; we had earlier claimed the gain was "13 rows", which was wrong because
+per-band RMSE deltas are not additive.
 
 **22. If it's just variance reduction, why not bag the physics model instead?**
 We tried — bagging recovers only **+0.13** of the +0.28 and made one seed worse, because

@@ -288,6 +288,12 @@ and here is where it stops.
 
 **What we will not claim:**
 
+- **There is one locality where our ODE is measurably off.** In the 0.5–10% predicted-yield
+  band the physics **misses low** — band RMSE 11.21 against 5.94 overall. State the shape
+  carefully: the mean shortfall is **+3.99** but the median only **+0.70**, so it is not a
+  uniform four-point offset but a handful of badly-missed cliff rows, with |need| reaching
+  **38 yield-points**. This holds whether or not the tree is in the model, and it is the same
+  29%-of-rows/91%-of-error concentration seen on the previous slide.
 - **12 of 150 rows cannot be reproduced by any offset within ±25 K.** Something else is
   going on in those rows and we have not identified it.
 - We do **not** claim the residual is fully accounted for. Against 10f-CV 6.36, the
@@ -312,35 +318,60 @@ and here is where it stops.
 **There is a 13% weight on an ExtraTrees model in our submission. We are telling you before
 you find it.**
 
-**It is variance reduction. It is not bias correction — we tested that and it failed.**
+**We could not demonstrate bias correction at our pre-registered bar** — sign test 8 of 13
+(62%, p = 0.581) against a bar of ≥ 11/13. The mean correction *is* directionally aligned
+(**+3.29** supplied against **+4.34** needed, same sign, ~76% of what is required), but at
+n = 13 we cannot separate that from variance reduction. **So we claim the weaker
+interpretation.**
 
 | Test | Result |
 |---|---|
-| Sign agreement in the band carrying the entire gain (0.5 < p ≤ 10) | **8** of **13** (62%, p = **0.581**) |
+| Sign agreement in the gain-carrying band (0.5 < p ≤ 10) | **8** of **13** (62%, p = **0.581**) |
 | Bar we pre-registered | ≥ 11/13 |
 | Correlation between physics error and tree error | **+0.070** |
 | Tree standalone RMSE on those rows | **15.04** vs 6.14 for physics |
 
 A weak, decorrelated estimator improves an ensemble by averaging even when it is far worse
-standalone. That is what this is.
+standalone — and that mechanism needs no bias claim to hold.
 
-**The cost, stated:** blending introduces **+1.083** of upward bias on the blended rows, and
-on the 56 near-zero rows it **loses -1.55** RMSE. We keep it because the net is **+0.27**
-across all three held-out seeds, the weight sits on a plateau rather than a peak, and we
-tested the principled alternative — **bagging the physics fit** — which recovered only +0.13
-and destabilised one seed.
+### Where the gain comes from — reconciled in squared error
+
+RMSE is not additive; squared error is. Pooled over 3 seeds × 150 rows:
+
+| Band | n | RMSE pre → post | ΔSSE | % of gain |
+|---|---|---|---|---|
+| dead, p ≤ 0.5 | 168 | 0.366 → **1.960** | **-622.9** | **-42.5%** |
+| low, 0.5 < p ≤ 10 | 39 | 11.210 → 9.580 | +1321.3 | +90.2% |
+| mid, 10 < p ≤ 60 | 86 | 9.441 → 8.957 | +765.9 | +52.3% |
+| above cutoff | 157 | unchanged | 0.0 | 0.0% |
+| **TOTAL** | **450** | **5.935 → 5.655** | **+1464.3** | **100%** |
+
+**This corrects an earlier claim of ours** that the whole gain came from 13 rows. It does
+not — the mid band contributes 52% of it. And the gain is **tail-dominated**: the top 3 of
+the 39 low-band rows supply 77% of that band's improvement, with pre-blend errors of 21–38
+yield-points against a band median |need| of just 1.46.
+
+**The cost, stated as a level not just a delta:** on the 168 near-zero predictions the slice
+RMSE goes **0.366 → 1.960**, a delta of **-1.594** and a cost of 622.9 SSE. Blending also
+introduces **+1.083** of upward bias on the blended rows. We keep it because the net is
+**+0.27** across all three held-out seeds, the weight sits on a plateau rather than a peak,
+and we tested the principled alternative — **bagging the physics fit** — which recovered only
++0.13 and destabilised one seed.
 
 **Why bagging failed is itself a finding.** Bootstrap replicates land in a second optimum on
 the likelihood surface — one that fits 135 rows at RMSE 2.56 but scores 13.05 held out. Our
 cold-start cross-validation found the same basin independently. Any resampling scheme on
 this dataset has to be checked for it.
 
-> **Presenter notes.** Deliver this deliberately; do not get discovered by it. The honest
-> summary is that the tree survives on measurement, not elegance — its whole contribution is
-> 13 rows, it is wrong-signed in the mid-range, and it costs bias. We considered dropping it
-> for a cleaner one-mechanism story and decided against discarding a measured +0.27. If a
-> judge says "that is an ML crutch in a physics pitch", agree that it is the least elegant
-> part of the model and point at the pre-registered bar we tested it against.
+> **Presenter notes.** Deliver deliberately; do not get discovered by it. Be careful with the
+> claim structure here — we say we *could not demonstrate* bias correction, not that it is
+> absent, because at n = 13 the sign test only detects a very large effect and the magnitude
+> evidence actually leans the other way. Claiming the weaker interpretation is the defensible
+> position, and a statistician on the panel will notice if we overstate it. The SSE table is
+> there because the per-band RMSE numbers do not sum and reading them as contributions is
+> what led us to claim the gain was 13 rows; it is 90% low band, 52% mid band, −43% dead
+> band. If a judge says "that is an ML crutch in a physics pitch", agree it is the least
+> elegant part of the model and point at the pre-registered bar we tested it against.
 
 ---
 
@@ -401,15 +432,23 @@ optimization"* — we do not quote a runtime for it, because none is published.
   our error bars widen, but the model still returns physics rather than a clamped constant.
 - **It is inspectable.** A plant engineer can check E1 and E2 against known kinetics and
   reject the model on chemistry, not on a validation curve.
-- **It states its own operating limit.** Keep the reactor below **449.9 K** or selectivity
-  collapses — a number the surrogate produces directly.
+- **It states its own operating condition — and the condition is joint in (T, tau).**
+  449.9 K is where the *rate constants* cross, not a ceiling on temperature. Yield depends on
+  k·tau, so a hot reactor with a short residence time still performs: **49 training rows sit
+  above the crossover and one reaches 75% yield**, and we predict **54.3%** for a test row at
+  487.9 K with tau = 0.066. The correct statement is that **above 449.9 K every additional
+  unit of residence time costs selectivity**, because k2 now outruns k1 — so past the
+  crossover, tau must be actively shortened rather than temperature simply capped.
 - **Honest limit:** 150 rows, one reactor geometry. Tube diameter is constant across all
   rows, so it folds into the fitted pre-exponentials and into U. A different tube requires a
   refit, not a retune.
 
-> **Presenter notes.** Close on the crossover temperature, not the RMSE — the RMSE wins
-> Phase 1 and the crossover wins Phase 2. The 225x is measured end-to-end against a solver
-> we verify against, so it is defensible as a like-for-like comparison; be careful not to
-> imply it is 225x faster than the organisers' original simulation, which we have never
-> timed. If asked about scale-up, the diameter caveat is the honest answer and volunteering
-> it is better than being asked.
+> **Presenter notes.** Close on the operating condition, not the RMSE — the RMSE wins Phase 1
+> and the process insight wins Phase 2. **State it as (T, tau), never as a temperature
+> ceiling:** a reaction engineer will immediately point out that at short residence time B
+> exits before it degrades, and our own training data contains a row above the crossover
+> yielding 75%. Getting this wrong on the closing slide would undo the credibility of
+> everything before it. The 225x is measured end-to-end against a solver we verify against,
+> so it is defensible as like-for-like; be careful not to imply it is 225x faster than the
+> organisers' original simulation, which we have never timed. If asked about scale-up, the
+> diameter caveat is the honest answer and volunteering it beats being asked.

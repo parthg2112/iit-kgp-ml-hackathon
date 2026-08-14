@@ -154,8 +154,36 @@ def build_facts():
         "OOF (spurious)", "pitch_evidence.json", [APPENDIX])
     add("tree_standalone", ev["tree_stats"]["tree_standalone_rmse"], "{:.2f}",
         "OOF, blended rows", "pitch_evidence.json", [DECK, APPENDIX])
-    add("dead_band_cost", tree["dead"]["band_rmse_gain"], "{:.2f}", "OOF, dead band",
-        "tree_sign_test.json", [DECK])
+    # NOTE: tree_sign_test.json also carries a dead-band cost (-1.55) computed on
+    # seed-AVERAGED predictions. It is deliberately NOT a declared fact: quoting both it and
+    # the pooled -1.594 puts two different numbers for one quantity in front of a judge.
+    # The pooled figure below is the one the docs state, because it is the basis whose band
+    # contributions sum exactly.
+
+    # --- reconciled band accounting (SSE, which is additive) --------------------
+    acc = load("blend_accounting.json")
+    by = {b["band"]: b for b in acc["bands"]}
+    add("sse_total_gain", acc["total_sse_delta"], "{:.1f}", "10f-CV pooled, 3 seeds",
+        "blend_accounting.json", [DECK, APPENDIX])
+    add("sse_low", by["low"]["sse_delta"], "{:+.1f}", "10f-CV pooled", "blend_accounting.json",
+        [DECK, APPENDIX])
+    add("sse_mid", by["mid"]["sse_delta"], "{:+.1f}", "10f-CV pooled", "blend_accounting.json",
+        [DECK, APPENDIX])
+    add("sse_dead", by["dead"]["sse_delta"], "{:.1f}", "10f-CV pooled", "blend_accounting.json",
+        [DECK, APPENDIX])
+    add("dead_rmse_pre", by["dead"]["rmse_pre"], "{:.3f}", "10f-CV pooled, dead band",
+        "blend_accounting.json", [DECK, APPENDIX])
+    add("dead_rmse_post", by["dead"]["rmse_post"], "{:.3f}", "10f-CV pooled, dead band",
+        "blend_accounting.json", [DECK, APPENDIX])
+    add("dead_rmse_delta", by["dead"]["rmse_delta"], "{:.3f}", "10f-CV pooled, dead band",
+        "blend_accounting.json", [DECK, APPENDIX])
+
+    # --- the operating rule is a JOINT (T, tau) condition, not a ceiling --------
+    op = load("operating_rule.json")
+    add("max_yield_above_crossover", op["max_observed_yield_above"], "{:.0f}", "observed",
+        "operating_rule.json", [DECK, APPENDIX])
+    add("train_rows_above_crossover", op["train_rows_above"], "{:.0f}", "observed",
+        "operating_rule.json", [DECK])
 
     # --- speed ----------------------------------------------------------------
     add("bdf_speedup", ev["timing"]["speedup_vs_bdf_at_512"], "{:.0f}", "measured",
@@ -201,6 +229,101 @@ def check_docs(facts, problems, notes):
                         f"{name}: the wide E2 band [210, 320] appears unlabelled -- it is a "
                         f"display heuristic, not the confidence interval. Line: {line[:90]}")
     return texts
+
+
+def check_arithmetic(problems, notes):
+    """A different defect class from a wrong number: every figure individually correct, the
+    SET collectively unreconcilable. That is what happened when the deck asserted the whole
+    blend gain came from 13 rows while also reporting a loss on the near-zero band -- both
+    true, jointly impossible, because per-band RMSE deltas are not additive.
+
+    So: assert that band contributions SUM, that every quoted delta equals the difference of
+    its quoted levels, and that every quoted ratio equals its quoted operands.
+    """
+    acc = load("blend_accounting.json")
+    ev = load("pitch_evidence.json")
+    params = load("physics_params.json")
+    v = params["vector"]
+
+    # (a) band-level SSE contributions must sum to the total
+    band_sum = sum(b["sse_delta"] for b in acc["bands"])
+    total = acc["total_sse_delta"]
+    if abs(band_sum - total) > 1e-6:
+        problems.append(f"band SSE deltas sum to {band_sum:.4f}, total is {total:.4f}")
+    else:
+        notes.append(f"band SSE contributions sum to the total "
+                     f"({total:.1f}, residual {abs(band_sum-total):.1e})")
+
+    # total SSE delta must equal pre minus post
+    if abs((acc["total_sse_pre"] - acc["total_sse_post"]) - total) > 1e-6:
+        problems.append("total_sse_delta != total_sse_pre - total_sse_post")
+
+    # (b) every band's quoted RMSE delta must equal the difference of its quoted levels,
+    #     and its RMSE levels must be consistent with its own SSE and n
+    for b in acc["bands"]:
+        if abs((b["rmse_pre"] - b["rmse_post"]) - b["rmse_delta"]) > 5e-4:
+            problems.append(f"band {b['band']}: rmse_delta {b['rmse_delta']:.4f} != "
+                            f"{b['rmse_pre']:.4f} - {b['rmse_post']:.4f}")
+        if b["n"]:
+            for tag in ("pre", "post"):
+                implied = (b[f"sse_{tag}"] / b["n"]) ** 0.5
+                if abs(implied - b[f"rmse_{tag}"]) > 5e-4:
+                    problems.append(
+                        f"band {b['band']}: rmse_{tag} {b[f'rmse_{tag}']:.4f} inconsistent "
+                        f"with sse_{tag}/n -> {implied:.4f}")
+
+    # pooled RMSE must be consistent with pooled SSE and N
+    N = acc["basis"]["n_predictions"]
+    for tag in ("pre", "post"):
+        implied = (acc[f"total_sse_{tag}"] / N) ** 0.5
+        if abs(implied - acc["basis"][f"pooled_{tag}"]) > 5e-4:
+            problems.append(f"pooled_{tag} {acc['basis'][f'pooled_{tag}']:.4f} inconsistent "
+                            f"with sqrt(SSE/N) = {implied:.4f}")
+    notes.append("every band RMSE level reconciles with its own SSE and n")
+
+    # (c) quoted ratios must equal their quoted operands
+    ratio = ev["crossover"]["E2_over_E1"]
+    if abs(ratio - v[3] / v[1]) > 1e-6:
+        problems.append(f"E2/E1 stated as {ratio:.4f} but E2/E1 = {v[3]/v[1]:.4f}")
+    speed = ev["timing"]["speedup_vs_bdf_at_512"]
+    implied = ev["timing"]["reference_solve_ms_150rows"] / ev["timing"]["integrate_512_ms_150rows"]
+    if abs(speed - implied) > 1e-6:
+        problems.append(f"BDF speed-up stated as {speed:.2f} but timings imply {implied:.2f}")
+    notes.append("quoted ratios (E2/E1, BDF speed-up) match their operands")
+
+    # the LOSO gain must equal the difference of the two LOSO levels
+    joint = load("joint_policy.json")["loso_mean"]
+    gain = joint["current"] - joint["apriori"]
+    if abs(gain - 0.3511) > 5e-4:
+        problems.append(f"LOSO gain {gain:.4f} no longer matches the documented +0.3511")
+    notes.append(f"LOSO gain {joint['current']:.3f} - {joint['apriori']:.3f} = {gain:.4f}")
+
+
+def check_deck_parity(problems, notes):
+    """deck.md and deck.html are two renderings of one deck, edited by hand. A number fixed
+    in one and missed in the other is invisible in review, so compare their numeric literals
+    directly. CSS lengths and the in-page crossover computation are excluded -- the latter
+    deliberately recomputes 449.9 K from the fitted parameters so the figure cannot drift."""
+    md_p, html_p = PITCH / DECK, PITCH / "deck.html"
+    if not (md_p.exists() and html_p.exists()):
+        return
+
+    def literals(text, strip_markup=False):
+        text = norm(text)
+        if strip_markup:
+            text = re.sub(r"<style>.*?</style>", " ", text, flags=re.S)
+            text = re.sub(r"<script>.*?</script>", " ", text, flags=re.S)
+            text = re.sub(r"<[^>]+>", " ", text)
+        return set(re.findall(r"(?<![\w.])\d+\.\d+(?![\w])", text))
+
+    md = literals(md_p.read_text(encoding="utf-8"))
+    html = literals(html_p.read_text(encoding="utf-8"), strip_markup=True)
+    for missing, where in ((md - html, "deck.html"), (html - md, "deck.md")):
+        if missing:
+            problems.append(f"deck parity: {sorted(missing)} present in the other rendering "
+                            f"but absent from {where}")
+    if not (md - html) and not (html - md):
+        notes.append(f"deck.md and deck.html agree on all {len(md)} numeric literals")
 
 
 def check_shipped(problems, notes):
@@ -263,6 +386,8 @@ def main() -> int:
     problems, notes = [], []
     facts = build_facts()
     check_shipped(problems, notes)
+    check_arithmetic(problems, notes)
+    check_deck_parity(problems, notes)
     check_notebook(problems, notes)
     check_docs(facts, problems, notes)
 

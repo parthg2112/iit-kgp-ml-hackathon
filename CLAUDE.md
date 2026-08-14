@@ -175,11 +175,23 @@ Harmless, but state it rather than let a judge find it.
 | corr(`jacket_temperature_K`, yield) | −0.498 |
 | corr(`concentration_mol_L`, yield) | +0.009 |
 | corr(`log_tau`, yield) | +0.061 |
-| ExtraTrees + physics features, repeated 10-fold | 16.37 ± 1.38 |
-| Physics ODE, train (all 150 rows, 2048 substeps) | **3.6559** |
-| Physics ODE, repeated 10-fold CV | **6.358 ± 0.124** |
-| Physics ODE, cold-start held-out folds | 2.97 / 13.05 / 1.93 (mean 5.98) |
-| **Shipped blend, 0.91 physics + 0.09 tree** | **5.711 OOF** |
+**Quote the protocol with every number — they are not comparable.** `train` = fit and scored
+on all 150. `10f-CV` = repeated 10-fold, parameters refit per fold, warm-started. `cold` =
+folds refit by differential evolution from scratch. `LOSO` = policy hyper-parameters chosen
+on two seeds and scored on the third (the only figure that prices hyper-parameter selection).
+
+| Quantity | Protocol | Value |
+|---|---|---|
+| ExtraTrees + physics features | 10f-CV | 16.37 ± 1.38 |
+| Physics ODE, raw | train | 3.6559 |
+| Physics ODE, raw | 10f-CV | 6.358 ± 0.124 |
+| Physics ODE, raw | cold | 2.97 / 13.05 / 1.93 (mean 5.98) |
+| Physics ODE, noise-averaged σ=1.67 | 10f-CV | 5.935 |
+| Previous policy (raw, w=0.910, c=60) | LOSO | 6.022 |
+| **SHIPPED: σ=1.67, w=0.87, cutoff=60** | **LOSO** | **5.671** |
+
+A 50-row test set adds large sampling noise on top of any of these: bootstrapping the OOF
+predictions gives a 5th–95th percentile of **[2.41, 9.07]**.
 
 The warm-started CV and the cold folds agree at ~6.0, which is the honest generalization
 estimate. An earlier run reported 3.662 ± 0.000; that was a bug (see the guard note above),
@@ -240,6 +252,35 @@ ODE's bias".
 
 *(Beware `corr(tree − physics, y − physics)`: both share `− physics`, so it is spuriously
 high. The sign test is the clean statistic.)*
+
+**The blend buys variance by paying bias — quantified.** Pure smoothed physics is essentially
+unbiased on the blended rows (mean signed OOF residual **+0.066**); blending shifts that to
+**+1.148**, an introduced bias of **+1.083** (exactly `(1−w)·mean_pull`). RMSE still improves
+6.142 → 5.807, so the trade is worth taking, but it is a weaker footing than bias correction
+would have been and should be stated that way. Broken down by band, the whole gain comes from
+13 rows at 0.5 < p ≤ 10 where the tree needs **+4.34** and supplies **+3.29**; in the
+mid-range it pushes **+0.70** where **−2.41** is needed, and it reaches the near-zero rows
+too (+0.77 applied, +0.13 needed) — so the tree is a second contributor to the lifted
+dead-edge row alongside smoothing.
+
+The weight is on a **broad plateau**, not a peak: gain 0.281 / 0.279 / 0.271 at w = 0.87 /
+0.85 / 0.89, falling off only below 0.80. Not a tuning artifact.
+
+**Bagged physics was tried as a replacement and failed** (`scripts/bagged_physics.py`). If
+the gain is pure averaging, bootstrapping the physics fit should deliver it with one model
+and no upward pull. It recovers only **+0.132 of the +0.281**, and on one seed it is *worse*
+than the single fit (6.62 vs 5.87). Reason: bootstrap resamples hold ~63% unique rows, and
+the cold-fold analysis already showed a distinct parameter basin that fits a subset better
+while generalising far worse — some replicates land there and drag the average. Bagging does
+keep predictions unbiased (+0.072), it just does not buy the variance reduction.
+
+### Answer ready for "why is there a random forest inside your physics model?"
+
+A weak, decorrelated estimator at 13% weight reduces ensemble variance by averaging. We
+tested whether it was correcting model bias — it is not (52% sign agreement, p = 0.88). We
+kept it because the effect is +0.27 measured across all held-out seeds, it sits on a plateau
+rather than a peak, and we verified the alternative (bagging the physics model) does not
+recover it. Deliver this deliberately; do not get discovered by it.
 
 **Known cost, accepted deliberately.** Noise-averaging slightly worsens the dead-regime edge:
 one training row (index 97, true **0.282**, raw 0.000 → smoothed 2.549) is lifted off zero.

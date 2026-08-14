@@ -411,8 +411,21 @@ coin flip; its mean pull is +11.5 where the physics needs −0.3 on average.
 What it does have is **decorrelated error** — correlation with the physics model's errors is
 just +0.07. A weak but decorrelated component reduces an ensemble's variance even when it is
 far worse standalone (15.0 vs 6.1 RMSE on these rows). So the honest description is *variance
-reduction*, not bias correction. It is also why the optimum weight sits near 0.87 rather than
-0.5: beyond that the tree's own much larger error dominates.
+reduction*, not bias correction.
+
+That is a weaker footing, and it has a measurable price: the blend **introduces bias to buy
+variance**. Pure physics is essentially unbiased on these rows (mean signed error +0.07);
+blending shifts it to +1.15. We take the trade because RMSE still improves 6.14 → 5.81, but
+we state it rather than leave it implicit.
+
+We also tested whether the variance reduction could come from a defensible single-model
+source instead — **bagging the physics fit** over bootstrap resamples. It recovers less than
+half the gain and on one seed is worse than the single fit, because bootstrap resamples hold
+only ~63% unique rows and some land in the alternative parameter basin documented in section
+4b. So the second model stays, on measured grounds rather than preference.
+
+The weight sits on a broad plateau (gain 0.281 / 0.279 / 0.271 at w = 0.87 / 0.85 / 0.89),
+not a sharp peak — so it is not a tuning artifact.
 
 ### 4d. …but a single global weight hides a defect
 

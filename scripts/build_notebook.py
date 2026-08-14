@@ -404,35 +404,45 @@ The gain is consistent across every held-out seed and the weight is stable (0.88
 this is a real improvement rather than a weight fitted to noise.
 
 What is the tree contributing? We tested the obvious explanation — that it corrects local
-bias in the ODE — and it **failed**. In the stratum where the tree helps, the direction it
-pulls agrees with the direction that would reduce error on 22 of 42 rows (52%, p = 0.88), a
-coin flip; its mean pull is +11.5 where the physics needs −0.3 on average.
+bias in the ODE — and it **failed twice, on two different strata**.
 
-What it does have is **decorrelated error** — correlation with the physics model's errors is
-just +0.07. A weak but decorrelated component reduces an ensemble's variance even when it is
-far worse standalone (15.0 vs 6.1 RMSE on these rows). So the honest description is *variance
-reduction*, not bias correction.
+Our first test used the mid-range stratum (10 < p ≤ 60): the tree's pull agreed with the
+direction that would reduce error on 22 of 42 rows (52%, p = 0.88). That test was sound in
+method but **wrong in stratum** — the mid-range contributes none of the blend's gain. So we
+re-ran it on the band that carries the entire gain, 0.5 < p ≤ 10: **8 of 13 rows (62%,
+p = 0.58)**, against a pre-registered bar of 11/13. Per individual seed it is 7/12, 9/13 and
+9/14 — no seed clears the bar. The verdict survives being tested where it matters.
+
+What the tree does have is **decorrelated error** — correlation with the physics model's
+errors is just +0.07. A weak but decorrelated component reduces an ensemble's variance even
+when it is far worse standalone (15.0 vs 6.1 RMSE on these rows). So the honest description
+is *variance reduction*, not bias correction.
 
 That is a weaker footing, and it has a measurable price: the blend **introduces bias to buy
 variance**. Pure physics is essentially unbiased on these rows (mean signed error +0.07);
-blending shifts it to +1.15. We take the trade because RMSE still improves 6.14 → 5.81, but
-we state it rather than leave it implicit.
+blending shifts it to +1.15. We take the trade because RMSE still improves 6.14 → 5.81 on
+those rows (5.935 → 5.654 whole-set, per seed), but we state it rather than leave it implicit.
 
 We also tested whether the variance reduction could come from a defensible single-model
-source instead — **bagging the physics fit** over bootstrap resamples. It recovers less than
-half the gain and on one seed is worse than the single fit, because bootstrap resamples hold
-only ~63% unique rows and some land in the alternative parameter basin documented in section
-4b. So the second model stays, on measured grounds rather than preference.
+source instead — **bagging the physics fit** over bootstrap resamples. It recovers only +0.13
+of the +0.28 and on one seed is worse than the single fit. The reason is worth more than the
+result: bootstrap resamples hold only ~63% unique rows, and some of them converge into the
+alternative parameter basin documented in section 4b — the one that fits a subset at RMSE
+2.56 while scoring 13.05 held out. Two unrelated procedures, cold-start cross-validation and
+360 bootstrap fits, independently fall into the same trap. That is a property of this
+likelihood surface, and any resampling scheme applied to this dataset has to be checked for
+it. So the second model stays, on measured grounds rather than preference.
 
 The weight sits on a broad plateau (gain 0.281 / 0.279 / 0.271 at w = 0.87 / 0.85 / 0.89),
 not a sharp peak — so it is not a tuning artifact.
 
 ### 4d. …but a single global weight hides a defect
 
-Breaking the blend's gain down by prediction stratum shows it is not uniform. The tree
-*helps* in the mid-range and *hurts* at both ends — badly on the rows the physics already
-gets essentially perfect, and again at the top, where a tree cannot extrapolate past its
-outermost split and can only pull predictions toward the training mean.
+Breaking the blend's gain down by prediction stratum shows it is not uniform — and it is far
+more concentrated than a global RMSE suggests. Essentially the entire gain comes from **13
+rows** in the 0.5–10 band (+1.74 RMSE there). On the 56 near-zero rows the blend **loses
+1.55**, and at the top a tree cannot extrapolate past its outermost split and can only pull
+predictions toward the training mean. That is what motivates the cutoff rule below.
 """),
     code("""
 BLEND_CUTOFF = 60.0     # default; the shipped value is read from blend.json
@@ -464,12 +474,23 @@ for i in range(P.shape[0]):
 """),
     md("""
 The rule is one threshold with the weight held at its already-validated value, and it
-improves on **every** held-out seed. We ship **0.91 physics + 0.09 ExtraTrees below a
-predicted yield of 60, and pure physics above it** — which also restores the top of the
-prediction range (97.7 rather than 96.6).
+improves on **every** held-out seed. We ship the weight and cutoff read from `blend.json`
+above — **0.87 physics + 0.13 ExtraTrees below a predicted yield of 60, pure physics above
+it** — which also restores the top of the prediction range.
 
 We only found this because we looked at the blend's gain *by regime*. A single global weight
 chosen on aggregate RMSE cannot see harm that is confined to one stratum.
+
+We stopped at one threshold on purpose. Gating the blend from *below* as well (skipping the
+near-zero rows, where it loses 1.55) scores better in-sample — but that number is measured on
+the same rows that would select it, and it would be a fourth tuned knob on a model whose
+whole claim is mechanism over fitting. We report it and do not take it.
+
+**Does this generalise to the test set?** The blend region covers 36 of 50 test rows (72%) vs
+98 of 150 train (65%), and the band composition matches closely — near-zero 44% vs 37%,
+0.5–10 8.0% vs 8.7%, mid-range 20% vs 19%. So the gain was measured against a population
+resembling the one we are scored on. (We deliberately do *not* quote a helpful-vs-harmful
+split for the test rows: that requires labels we do not have.)
 """),
     md("""
 ## 5. Model selection: what we tested and rejected
@@ -491,8 +512,12 @@ for name, r in sorted(mc.items(), key=lambda kv: kv[1]["train_rmse"]):
 - **Tanks-in-series** tested whether axial dispersion matters. At *fixed* parameters the
   entire effect is worth ~0.08 RMSE; the larger apparent gain from refitting was the
   optimizer exploiting the coarse cascade's discretization error, not physics. Rejected.
-- **A parallel $A \\to C$ path** was ruled out on the data: yields reach 99.97%, and a
-  parallel path consumes A without producing B, capping achievable yield below 100%.
+- **A parallel $A \\to C$ path** was tested by fitting it, not argued away. Our first
+  reasoning was *wrong* and we record it: "yields reach 99.97%, so a parallel path is
+  excluded" only bounds $k_3/(k_1+k_3) < 0.0003$ **at that row's 383 K**, while the data
+  spans 363–516 K — and $k_3$ carries its own activation energy. Locally true, globally
+  invalid. Fitted properly with $\\ln k_{3,ref}$ and $E_3$ free, $\\ln k_3$ drives to its
+  lower bound and cross-validated RMSE moves by 0.0003. Rejected on measurement.
 
 ### Tested and priced, not merely skipped
 
@@ -662,6 +687,14 @@ print(f"\\n{m.sum()}/{len(train)} rows ({m.mean():.0%}) carry {100*err2[m].sum()
 **29% of rows carry 91% of the squared error**, while the settled rows sit at an RMSE of
 0.65. This is the honest statement of what our score depends on: not the model's average
 quality, but how a minority of cliff-edge rows happen to fall.
+
+The same concentration shows up when we slice by predicted yield instead of by neighbourhood
+spread. In the 0.5–10% band the ODE **misses low**: band RMSE 11.26 against 5.64 overall,
+with 8 of 13 rows under-predicted. But the shape of that miss matters, and it is easy to
+overstate — the **mean** shortfall is +4.34 while the **median** is only +1.05. It is not a
+uniform four-point offset; it is a handful of badly-missed rows, which is the 29/91
+decomposition appearing again rather than a separate systematic bias. This is a genuine
+locality where our model is weakest, and it is where the blend of section 4 earns its keep.
 
 ### 6b-ii. And that remaining error is input noise, not missing physics
 

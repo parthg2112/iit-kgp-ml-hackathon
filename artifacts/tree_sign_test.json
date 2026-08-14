@@ -1,0 +1,50 @@
+{
+  "dead": {
+    "n": 56,
+    "aligned": 17,
+    "p": 0.004561532746408219,
+    "mean_pull": 5.922946280817931,
+    "mean_applied": 0.7699830165063309,
+    "mean_needed": 0.12767419004412264,
+    "band_rmse_gain": -1.5474200471124233
+  },
+  "low": {
+    "n": 13,
+    "aligned": 8,
+    "p": 0.5810546875,
+    "mean_pull": 25.282463383923417,
+    "mean_applied": 3.286720239910044,
+    "mean_needed": 4.339072069820784,
+    "band_rmse_gain": 1.7409163386450697
+  },
+  "mid": {
+    "n": 29,
+    "aligned": 14,
+    "p": 1.0,
+    "mean_pull": 5.37675550961672,
+    "mean_applied": 0.6989782162501734,
+    "mean_needed": -2.4135724932568725,
+    "band_rmse_gain": 0.23203975425618317
+  },
+  "gate": {
+    "band": "0.5 < p <= 10",
+    "n": 13,
+    "aligned": 8,
+    "p": 0.5810546875,
+    "verdict": "VARIANCE REDUCTION",
+    "bar": 11
+  },
+  "physics_band_bias": {
+    "mean_signed_residual": 4.339072069820784,
+    "band_rmse": 11.255907079120337
+  },
+  "coverage": {
+    "train_in_region": 98,
+    "test_in_region": 36,
+    "train_frac": 0.6533333333333333,
+    "test_frac": 0.72,
+    "train_helpful_by_sign": 39,
+    "train_helpful_by_error": 28,
+    "helpful_ratio_by_error": 0.2857142857142857
+  }
+}

@@ -34,6 +34,7 @@ $PY scripts/check_cold_folds.py    # cold-start folds; the honest generalization
 $PY scripts/sweep_tanks.py         # tanks-in-series: does plug flow hold?
 $PY scripts/profile_params.py --param E2_kJ   # profile likelihood; also a1, n_flow, E1_kJ
 $PY scripts/verify_residual_hybrid.py         # does a residual corrector earn its place?
+$PY scripts/tree_sign_test.py                 # bias or variance? band-by-band; names its stratum
 $PY scripts/weighted_ensemble.py              # is there a posterior worth averaging over?
 $PY scripts/audit_rows.py                     # row-level verdicts vs an external audit
 ```
@@ -241,27 +242,58 @@ again at the top where a tree cannot extrapolate. Hence the **regime-aware** rul
 a predicted yield of 60, pure physics above (`BLEND_CUTOFF` / `apply_blend` in
 `src/evaluate.py`). The cutoff came out at 60 in every leave-one-seed-out fold.
 
-**The tree's 13% is variance reduction, not bias correction** — tested, and the bias claim
-failed. In the stratum where the tree helps, the direction it pulls agrees with the direction
-that would reduce error on only **22 of 42 rows (52%, p = 0.88)** — a coin flip. Its mean pull
-is **+11.5** where the physics needs **−0.3** on average. What it does have is decorrelated
-error (correlation with the physics error **+0.070**), and a weak decorrelated component
-improves an ensemble by averaging even when far worse standalone (15.0 vs 6.1 RMSE on the
-blended rows). Say "variance reduction from a decorrelated component", never "it corrects the
-ODE's bias".
+**The tree's 13% is variance reduction, not bias correction** — tested twice, on two
+different strata, and **always quote which stratum a sign test was run on**
+(`scripts/tree_sign_test.py`).
+
+| Sign test | Stratum | Result | Status |
+|---|---|---|---|
+| First | mid-range 10 < p ≤ 60 | 22/42 (52%, p = 0.88) | **superseded — wrong stratum**; the mid-range contributes *none* of the gain |
+| **Decisive** | **0.5 < p ≤ 10, where the entire +0.27 lives** | **8/13 (62%, p = 0.58)** | bar was ≥ 11/13; per-seed 7/12 · 9/13 · 9/14, no seed clears it |
+
+The first test was not wrong in method, only in stratum choice — it measured the band where
+the tree is wrong-signed rather than the band that carries the gain. Re-run where it matters,
+the verdict is unchanged: no significant sign alignment, so **variance reduction, not bias
+correction**. What the tree does have is decorrelated error (correlation with the physics
+error **+0.070**), and a weak decorrelated component improves an ensemble by averaging even
+when far worse standalone (15.0 vs 6.1 RMSE on the blended rows).
 
 *(Beware `corr(tree − physics, y − physics)`: both share `− physics`, so it is spuriously
-high. The sign test is the clean statistic.)*
+high. The sign test is the clean statistic — but only on a stratum where `need` and `pull`
+both vary in sign; see the dead-band note below for where it degenerates.)*
 
 **The blend buys variance by paying bias — quantified.** Pure smoothed physics is essentially
 unbiased on the blended rows (mean signed OOF residual **+0.066**); blending shifts that to
-**+1.148**, an introduced bias of **+1.083** (exactly `(1−w)·mean_pull`). RMSE still improves
-6.142 → 5.807, so the trade is worth taking, but it is a weaker footing than bias correction
-would have been and should be stated that way. Broken down by band, the whole gain comes from
-13 rows at 0.5 < p ≤ 10 where the tree needs **+4.34** and supplies **+3.29**; in the
-mid-range it pushes **+0.70** where **−2.41** is needed, and it reaches the near-zero rows
-too (+0.77 applied, +0.13 needed) — so the tree is a second contributor to the lifted
+**+1.148**, an introduced bias of **+1.083** (exactly `(1−w)·mean_pull`). Restricted to those
+blended rows, RMSE still improves 6.142 → 5.807 — a subset figure, quoted here only to price
+the bias; the whole-set headline is the per-seed **5.9352 → 5.6541**. The trade is worth
+taking, but it is a weaker footing than bias correction would have been and should be stated
+that way.
+
+Per-band breakdown (seed-averaged predictions; the RMSE headline stays the per-seed
+**5.9352 → 5.6541, +0.2811**, which is the protocol the docs and LOSO use):
+
+| Band | n | mean pull | applied | needed | band RMSE gain |
+|---|---|---|---|---|---|
+| dead, p ≤ 0.5 | 56 | +5.92 | +0.77 | +0.13 | **−1.547** |
+| low, 0.5 < p ≤ 10 | 13 | +25.28 | +3.29 | +4.34 | **+1.741** |
+| mid, 10 < p ≤ 60 | 29 | +5.38 | +0.70 | −2.41 | +0.232 |
+
+The whole gain is 13 rows. The blend **loses 1.547** on the 56 dead rows — the largest
+stratum — and that is the honest cost, not a footnote. Note the tree also reaches the
+near-zero rows (+0.77 applied vs +0.13 needed), so it is a second contributor to the lifted
 dead-edge row alongside smoothing.
+
+**Do not quote the dead band's sign test (17/56, p = 0.005) as a finding — it is
+near-tautological.** The tree's pull is positive on **56 of 56** dead rows (a tree cannot
+predict below its training floor), so the sign test there collapses to "is `y > phys`",
+which is just the 39/56 rows where the physics is already at or above truth. The
+non-tautological statement is the RMSE cost, **−1.547**. Lead with that.
+
+**A lower gate was measured and NOT adopted.** Blending only where p > 0.5 scores 5.5309 vs
+the shipped 5.6541 — but that is in-sample, on the rows that would judge it, and it is a
+fourth free knob on a mechanism already rejected once as mechanism-plus-patch. Reported for
+honesty, not taken. `scripts/tree_sign_test.py` prints the sweep.
 
 The weight is on a **broad plateau**, not a peak: gain 0.281 / 0.279 / 0.271 at w = 0.87 /
 0.85 / 0.89, falling off only below 0.80. Not a tuning artifact.
@@ -269,18 +301,47 @@ The weight is on a **broad plateau**, not a peak: gain 0.281 / 0.279 / 0.271 at 
 **Bagged physics was tried as a replacement and failed** (`scripts/bagged_physics.py`). If
 the gain is pure averaging, bootstrapping the physics fit should deliver it with one model
 and no upward pull. It recovers only **+0.132 of the +0.281**, and on one seed it is *worse*
-than the single fit (6.62 vs 5.87). Reason: bootstrap resamples hold ~63% unique rows, and
-the cold-fold analysis already showed a distinct parameter basin that fits a subset better
-while generalising far worse — some replicates land there and drag the average. Bagging does
-keep predictions unbiased (+0.072), it just does not buy the variance reduction.
+than the single fit (6.62 vs 5.87). Bagging does keep predictions unbiased (+0.072), it just
+does not buy the variance reduction.
+
+**Report the failure as a robustness finding, not a dead end.** The reason it fails is the
+interesting part: bootstrap resamples hold ~63% unique rows, and some replicates converge
+into the **second seductive optimum** on the likelihood surface — the one the cold-fold
+analysis independently found at train 2.56 / held-out 13.05. Two unrelated procedures
+(10-fold cold refits, and 360 bootstrap fits) both fall into it. So the likelihood surface
+has a competitive-looking basin that fits ~135 rows better and generalises far worse, and
+any resampling scheme on this dataset must be checked for it. That is a statement about the
+problem, not about our code, and it belongs in the deck.
+
+### Where the ODE itself is off — independent of the tree
+
+In the same 0.5 < p ≤ 10 band the physics **misses low**, and this holds whether or not the
+tree is in the model. But state it carefully: **mean +4.34, median +1.05, 8/13 rows
+under-predicted, band RMSE 11.26 vs 5.64 overall.** That is *not* a uniform 4-point offset —
+it is a few badly-missed rows dragging the mean. Anyone who asks "bias or two outliers?"
+is right to, and the honest answer connects it straight to the
+29%-of-rows-carry-91%-of-the-error decomposition rather than standing as a separate claim.
+Same caution on "supplies +3.29 of +4.34 needed": that is a mean-on-mean ratio over a skewed
+distribution, so it is a qualifying clause, never a headline.
 
 ### Answer ready for "why is there a random forest inside your physics model?"
 
-A weak, decorrelated estimator at 13% weight reduces ensemble variance by averaging. We
-tested whether it was correcting model bias — it is not (52% sign agreement, p = 0.88). We
-kept it because the effect is +0.27 measured across all held-out seeds, it sits on a plateau
-rather than a peak, and we verified the alternative (bagging the physics model) does not
-recover it. Deliver this deliberately; do not get discovered by it.
+> Our ODE misses low in the 0.5–10% yield band — median about a point, mean about four
+> because a few rows are badly missed. A 13% weight on a decorrelated tree recovers roughly
+> three-quarters of that mean. In the mid-range it is wrong-signed and costs us, on the dead
+> rows it costs us 1.5 RMSE, and overall it introduces +1.08 of bias. We keep it because the
+> net is +0.27 across all three held-out seeds on a plateau in w, and because we tested the
+> principled alternative — bagging the physics fit — which recovered only +0.13 and
+> destabilised one seed.
+
+Deliver this deliberately; do not get discovered by it.
+
+**Test-set coverage of the blend region.** 36 of 50 test rows fall below the cutoff (72%) vs
+98 of 150 train (65%), and the band composition matches: dead 44% test vs 37% train, low
+8.0% vs 8.7%, mid 20% vs 19%. So the gain was measured against a population resembling the
+one we face. **Do not claim a helpful:harmful ratio on the test set** — helpfulness needs
+labels, so it is not a measurable quantity there. On train it is 28:70 by error-reduced or
+39:59 by pull-sign; the two definitions disagree, so name which one you mean.
 
 **Known cost, accepted deliberately.** Noise-averaging slightly worsens the dead-regime edge:
 one training row (index 97, true **0.282**, raw 0.000 → smoothed 2.549) is lifted off zero.

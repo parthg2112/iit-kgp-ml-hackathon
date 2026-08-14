@@ -1,0 +1,895 @@
+<title>Recovering the Reactor</title>
+
+<style>
+  :root {
+    /* Light palette. Neutrals carry a teal bias so they read as chosen, not defaulted. */
+    --ground:      #F1F4F4;
+    --surface:     #FBFCFC;
+    --surface-alt: #E7EDEC;
+    --ink:         #10201F;
+    --ink-soft:    #405351;
+    --ink-mute:    #6B7F7D;
+    --rule:        #CBD8D6;
+    --accent:      #0F6E6E;   /* selective regime */
+    --accent-soft: #DCEBE9;
+    --hot:         #B03A17;   /* destructive regime: costs, rejections, only */
+    --hot-soft:    #F6E3DC;
+    --shadow:      0 1px 2px rgba(16,32,31,.06), 0 8px 24px -12px rgba(16,32,31,.18);
+
+    --display: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    --body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #0A1213;
+      --surface:     #101B1C;
+      --surface-alt: #172627;
+      --ink:         #E4EDEB;
+      --ink-soft:    #A9BDBA;
+      --ink-mute:    #7C918E;
+      --rule:        #24393A;
+      --accent:      #5FC9BE;
+      --accent-soft: #10302F;
+      --hot:         #F08256;
+      --hot-soft:    #33180F;
+      --shadow:      0 1px 2px rgba(0,0,0,.5), 0 10px 30px -14px rgba(0,0,0,.8);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:      #0A1213;
+    --surface:     #101B1C;
+    --surface-alt: #172627;
+    --ink:         #E4EDEB;
+    --ink-soft:    #A9BDBA;
+    --ink-mute:    #7C918E;
+    --rule:        #24393A;
+    --accent:      #5FC9BE;
+    --accent-soft: #10302F;
+    --hot:         #F08256;
+    --hot-soft:    #33180F;
+    --shadow:      0 1px 2px rgba(0,0,0,.5), 0 10px 30px -14px rgba(0,0,0,.8);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 17px;
+    line-height: 1.6;
+    margin: 0;
+    padding: 0 clamp(16px, 4vw, 48px) 96px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 1000px; margin: 0 auto; }
+
+  /* ---------- masthead ---------- */
+  .masthead {
+    display: flex; flex-direction: column; gap: 20px;
+    padding: clamp(48px, 8vw, 96px) 0 40px;
+    border-bottom: 2px solid var(--ink);
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: .74rem; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--accent); margin: 0;
+  }
+  h1 {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: clamp(2.6rem, 7vw, 4.4rem);
+    line-height: 1.02;
+    letter-spacing: -.02em;
+    text-wrap: balance;
+    margin: 0;
+  }
+  .team { font-family: var(--display); font-style: italic; font-size: 1.3rem; color: var(--ink-soft); margin: 0; }
+
+  .headline-stat {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 22px;
+    margin-top: 8px;
+  }
+  .headline-stat .num {
+    font-family: var(--mono); font-variant-numeric: tabular-nums;
+    font-size: clamp(2rem, 5vw, 2.9rem); font-weight: 600;
+    color: var(--accent); line-height: 1;
+  }
+  .headline-stat .cap { font-family: var(--mono); font-size: .78rem; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--ink-mute); }
+
+  .provenance {
+    background: var(--surface); border: 1px solid var(--rule); border-left: 3px solid var(--accent);
+    padding: 14px 18px; font-size: .88rem; color: var(--ink-soft);
+  }
+  .provenance code { font-family: var(--mono); font-size: .85em; color: var(--ink); }
+
+  /* ---------- controls ---------- */
+  .controls {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    padding: 12px 0; margin-bottom: 8px;
+    background: color-mix(in srgb, var(--ground) 92%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--rule);
+  }
+  button {
+    font-family: var(--mono); font-size: .74rem; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--ink); background: var(--surface);
+    border: 1px solid var(--rule); border-radius: 2px;
+    padding: 7px 13px; cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button[aria-pressed="true"] { background: var(--accent); color: var(--ground); border-color: var(--accent); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .controls .spacer { flex: 1; }
+  .controls .count { font-family: var(--mono); font-size: .74rem; color: var(--ink-mute); }
+
+  /* ---------- slides ---------- */
+  .slide {
+    display: grid;
+    grid-template-columns: 68px minmax(0, 1fr);
+    gap: 0 24px;
+    padding: 56px 0;
+    border-bottom: 1px solid var(--rule);
+    scroll-margin-top: 64px;
+  }
+  .slide-no {
+    font-family: var(--mono); font-variant-numeric: tabular-nums;
+    font-size: .8rem; color: var(--ink-mute);
+    padding-top: .5rem;
+    border-top: 2px solid var(--accent);
+    align-self: start;
+  }
+  .slide-body { min-width: 0; display: flex; flex-direction: column; gap: 18px; }
+  .slide h2 {
+    font-family: var(--display); font-weight: 600;
+    font-size: clamp(1.7rem, 3.6vw, 2.5rem); line-height: 1.12;
+    letter-spacing: -.015em; text-wrap: balance; margin: 0;
+  }
+  .slide h3 {
+    font-family: var(--mono); font-size: .78rem; letter-spacing: .13em;
+    text-transform: uppercase; color: var(--accent); margin: 10px 0 0;
+  }
+  .slide p { margin: 0; max-width: 66ch; }
+  .slide ul { margin: 0; padding-left: 1.1em; max-width: 66ch; display: flex; flex-direction: column; gap: 9px; }
+  strong { font-weight: 650; }
+
+  .lede { font-size: 1.12rem; color: var(--ink-soft); max-width: 62ch; }
+
+  /* the one big number on a slide */
+  .bignum {
+    font-family: var(--mono); font-variant-numeric: tabular-nums;
+    font-size: clamp(1.9rem, 4.6vw, 2.7rem); font-weight: 600;
+    color: var(--accent); line-height: 1.1;
+    padding: 18px 22px; background: var(--accent-soft);
+    border-left: 3px solid var(--accent);
+  }
+  .bignum small { display: block; font-family: var(--body); font-size: .95rem;
+    font-weight: 400; color: var(--ink-soft); margin-top: 6px; letter-spacing: 0; }
+
+  .callout {
+    background: var(--surface); border: 1px solid var(--rule);
+    border-left: 3px solid var(--hot);
+    padding: 16px 20px; font-size: .96rem;
+  }
+  .callout .tag {
+    font-family: var(--mono); font-size: .7rem; letter-spacing: .13em; text-transform: uppercase;
+    color: var(--hot); display: block; margin-bottom: 6px;
+  }
+
+  /* ---------- tables ---------- */
+  .tablewrap { overflow-x: auto; border: 1px solid var(--rule); background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: .93rem; }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  thead th {
+    font-family: var(--mono); font-size: .7rem; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--ink-mute); font-weight: 500; background: var(--surface-alt);
+    position: sticky; top: 0;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num, th.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  tr.ship { background: var(--accent-soft); }
+  tr.ship td { font-weight: 600; }
+  .good { color: var(--accent); font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .bad  { color: var(--hot);    font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .proto { font-family: var(--mono); font-size: .78rem; color: var(--ink-mute); white-space: nowrap; }
+
+  code { font-family: var(--mono); font-size: .86em; background: var(--surface-alt);
+    padding: 1px 5px; border-radius: 2px; }
+  pre {
+    font-family: var(--mono); font-size: .84rem; line-height: 1.55;
+    background: var(--surface); border: 1px solid var(--rule); border-left: 3px solid var(--accent);
+    padding: 16px 18px; overflow-x: auto; margin: 0;
+  }
+
+  /* ---------- figure ---------- */
+  figure { margin: 0; background: var(--surface); border: 1px solid var(--rule); padding: 18px; }
+  figcaption { font-size: .85rem; color: var(--ink-mute); margin-top: 12px; max-width: 62ch; }
+  canvas { width: 100%; height: auto; display: block; }
+
+  /* ---------- presenter notes ---------- */
+  .notes {
+    background: var(--surface-alt);
+    border-top: 1px solid var(--rule);
+    padding: 16px 20px;
+    font-size: .91rem; color: var(--ink-soft);
+    max-width: 74ch;
+  }
+  .notes .tag {
+    font-family: var(--mono); font-size: .68rem; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--ink-mute); display: block; margin-bottom: 7px;
+  }
+  body.hide-notes .notes { display: none; }
+
+  footer {
+    padding: 48px 0 0; font-size: .87rem; color: var(--ink-mute);
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  footer code { font-size: .85em; }
+
+  @media (max-width: 640px) {
+    .slide { grid-template-columns: 1fr; gap: 14px; }
+    .slide-no { border-top: none; padding-top: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">IIT-KGP ML Hackathon · Phase 2 pitch</p>
+    <h1>Recovering the Reactor</h1>
+    <p class="team">Team Claude ke Chatore</p>
+    <div class="headline-stat">
+      <span class="num">5.671</span><span class="cap">LOSO RMSE — shipped</span>
+      <span class="num">16.37</span><span class="cap">10f-CV — best tree ensemble</span>
+      <span class="num">7</span><span class="cap">free parameters</span>
+    </div>
+    <div class="provenance">
+      Every number in this deck is declared in <code>scripts/audit_pitch.py</code> and checked
+      against <code>artifacts/</code> on each run. If a figure here disagrees with the
+      repository, the audit fails. Submission <code>c68e0e748e4928f2</code>.
+    </div>
+  </header>
+
+  <div class="controls">
+    <button id="notesBtn" aria-pressed="true">Presenter notes: on</button>
+    <button id="themeBtn">Toggle theme</button>
+    <span class="spacer"></span>
+    <span class="count">12 slides</span>
+  </div>
+
+  <!-- 1 -->
+  <section class="slide" id="s1">
+    <div class="slide-no">01</div>
+    <div class="slide-body">
+      <h2>The trade-off that decides everything</h2>
+      <p class="lede">Two reactions compete for the same molecule. B is the product
+        <em>and</em> the feedstock for the waste reaction.</p>
+      <pre>A --k1--&gt; B --k2--&gt; C
+          ^product  ^waste</pre>
+
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Reaction</th><th class="num">Activation energy</th></tr></thead>
+          <tbody>
+            <tr><td>Desired, A → B</td><td class="num">43.16 kJ/mol</td></tr>
+            <tr><td>Waste, B → C</td><td class="num">250.07 kJ/mol</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="bignum">E₂ / E₁ = 5.79
+        <small>Heating accelerates the destruction of B almost six times as steeply as its
+        formation. The rate constants cross at 449.9 K.</small></div>
+
+      <figure>
+        <canvas id="arrhenius" width="900" height="380" role="img"
+          aria-label="Arrhenius plot: k1 and k2 versus temperature, crossing at 449.9 K. Below the crossover k1 exceeds k2 and the reactor makes B faster than it destroys it; above, k2 dominates."></canvas>
+        <figcaption>Rate constants from the fitted parameters. Left of the crossover the reactor
+          makes B faster than it destroys it; right of it, selectivity collapses. The crossover
+          sits inside the observed temperature range, so it is interpolated, not extrapolated.</figcaption>
+      </figure>
+
+      <p><strong>That single ratio explains the dataset.</strong> It is why jacket temperature
+        correlates <em>negatively</em> with yield (−0.498), why a quarter of training rows are
+        exactly zero, and why there is an optimum at all.</p>
+
+      <div class="notes"><span class="tag">Presenter notes</span>
+        Open here, not on the modelling — the rubric scores process insight, so lead with the
+        physical statement and let the ML follow. The crossover is computed from the fitted
+        parameters, not read off a chart, and at 449.9 K it sits inside the training envelope of
+        351.6–548.0 K. If asked how a ratio of activation energies can "explain a dataset": it
+        sets the sign of dY/dT, and that sign is what makes the yield surface a ridge rather
+        than a slope.
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 -->
+  <section class="slide" id="s2">
+    <div class="slide-no">02</div>
+    <div class="slide-body">
+      <h2>How we measure, stated once</h2>
+      <p class="lede">One submission. No leaderboard. Every decision made against
+        cross-validation, never a probe score.</p>
+      <p>We report <strong>leave-one-seed-out (LOSO)</strong>: the prediction policy is chosen on
+        two random seeds and scored on the third. It is the only protocol that prices
+        <em>hyper-parameter selection</em> rather than hiding it.</p>
+
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Model</th><th>Protocol</th><th class="num">RMSE</th></tr></thead>
+          <tbody>
+            <tr><td>Best tree ensemble (ExtraTrees + physics features)</td><td class="proto">10f-CV</td><td class="num">16.37</td></tr>
+            <tr><td>Physics ODE, raw</td><td class="proto">10f-CV</td><td class="num">6.36</td></tr>
+            <tr><td>Previous policy</td><td class="proto">LOSO</td><td class="num">6.022</td></tr>
+            <tr class="ship"><td>SHIPPED — σ 1.67 K, w 0.87, cutoff 60</td><td class="proto">LOSO</td><td class="num">5.671</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Every other figure in this deck carries its protocol inline. They are <strong>not</strong>
+        comparable to one another.</p>
+
+      <div class="callout"><span class="tag">The honest caveat</span>
+        A 50-row test set is small. Bootstrapping our out-of-fold predictions gives a 5th–95th
+        percentile of <strong>[2.41, 9.07]</strong>. A large part of the final score is luck, and
+        we would rather say so than present a point estimate as a promise.
+      </div>
+
+      <div class="notes"><span class="tag">Presenter notes</span>
+        Put this second, before any result, so no number later needs defending on protocol
+        grounds. The bootstrap band pre-empts "you got lucky/unlucky" and signals we understand
+        our own error bars. If asked why not just quote 10-fold CV — because σ, w and cutoff were
+        all selected using CV, so quoting that same CV would report a gain measured at its own
+        optimum. LOSO holds a seed back from the selection itself.
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 -->
+  <section class="slide" id="s3">
+    <div class="slide-no">03</div>
+    <div class="slide-body">
+      <h2>We recovered the reactor rather than approximating it</h2>
+      <p class="lede">We did not fit a regressor to the target. We wrote down the governing
+        equations and fitted their physical parameters.</p>
+<pre>dCA/dz = -k1*CA
+dCB/dz =  k1*CA - k2*CB
+dT/dz  =  a1*k1*CA + a2*k2*CB + U*(T_jacket - T)</pre>
+
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th></th><th>Our ODE</th><th>A tree ensemble</th></tr></thead>
+          <tbody>
+            <tr><td>Free parameters</td><td><strong>7</strong></td><td>thousands of effective splits</td></tr>
+            <tr><td>Extrapolates?</td><td>yes — it is the mechanism</td><td>no — bounded by outermost split</td></tr>
+            <tr><td>Parameters mean something</td><td>activation energies, heats of reaction</td><td>node thresholds</td></tr>
+            <tr><td>10f-CV RMSE</td><td class="good">6.36</td><td class="bad">16.37</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <ul>
+        <li><strong>Arrhenius reparameterized about 430 K.</strong> Fitting ln A and E directly
+          correlates them above 0.999 and turns the objective into a long narrow valley.</li>
+        <li><strong>An operator-splitting integrator</strong> that advances the mass balance
+          <em>analytically</em> and the energy balance with the exact linear solution. Both halves
+          are unconditionally stable. Fixed-step RK4 blew up on thermal-runaway rows; this does not.</li>
+      </ul>
+
+      <div class="notes"><span class="tag">Presenter notes</span>
+        The parameter-count contrast is the Innovation criterion in one table. Don't oversell "no
+        architecture search" — the point is the functional form came from chemistry, so there was
+        nothing to search. On the integrator: we needed thousands of evaluations for a global fit,
+        and 150 separate solve_ivp calls per evaluation was unaffordable; the analytic step made
+        multistart possible. Its accuracy is verified against SciPy BDF, not assumed.
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section class="slide" id="s4">
+    <div class="slide-no">04</div>
+    <div class="slide-body">
+      <h2>The operating map</h2>
+      <p class="lede">Yield is a ridge, not a slope. Too cold or too fast, A never converts. Too
+        hot or too slow, B is destroyed.</p>
+
+      <div class="bignum">corr(log τ, yield) = +0.061
+        <small>Residence time is the single most important derived quantity in the problem — and
+        its linear correlation with yield is essentially zero.</small></div>
+
+      <p>That is the signature of an <strong>interior optimum</strong>: low τ leaves A unconverted,
+        high τ destroys B, so both tails are low-yield and the correlation cancels.</p>
+      <p>A model selecting features by correlation would discard residence time entirely. This is
+        the clearest reason we did not let a feature-importance ranking drive the model.</p>
+
+      <div class="notes"><span class="tag">Presenter notes</span>
+        This slide demonstrates reading a diagnostic correctly, and it is a trap we watched others
+        fall into — the same logic applies to concentration, which is the next slide. If asked what
+        we would have done without the physics model: a partial-dependence plot would have shown
+        the ridge, but we would not have known <em>why</em>, and could not quote a crossover
+        temperature a plant engineer can act on.
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 -->
+  <section class="slide" id="s5">
+    <div class="slide-no">05</div>
+    <div class="slide-body">
+      <h2>Why concentration does not matter — and why the obvious answer is wrong</h2>
+      <div class="bignum">corr(concentration, yield) = +0.009
+        <small>A knob the operator controls, doing essentially nothing. Why?</small></div>
+
+      <h3>The tempting answer</h3>
+      <p>"Both reactions are first-order, so CA₀ cancels." True for the isothermal yield
+        expression — but incomplete. A richer feed releases more reaction heat, which should change
+        yield through the thermal path.</p>
+
+      <h3>The next tempting answer</h3>
+      <p>"So the reactions must be thermally neutral." <strong>We tested this and it is false.</strong>
+        Forcing a₁ = a₂ = 0 costs train RMSE <span class="bad">8.27</span> against 3.66. The heat
+        terms are real and large.</p>
+
+      <h3>What actually happens</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Heat coefficient</th><th class="num">Value</th><th class="num">Adiabatic swing at mean feed</th></tr></thead>
+          <tbody>
+            <tr><td>a₁ (A → B)</td><td class="num">−11.79 K·L/mol</td><td class="num">−27 K</td></tr>
+            <tr><td>a₂ (B → C)</td><td class="num">+11.34 K·L/mol</td><td class="num">+26 K</td></tr>
+            <tr class="ship"><td>Net</td><td class="num">—</td><td class="num">−1 K</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Opposite signs, near-equal magnitude. <strong>The two heat effects very nearly cancel.</strong>
+        That is the defensible answer, and we only have it because we fitted the mechanism.</p>
+
+      <div class="notes"><span class="tag">Presenter notes</span>
+        Strongest process-insight slide — don't rush it. The structure (obvious answer, better
+        answer, both wrong, measured answer) is the whole pitch in miniature. First-order kinetics
+        is itself measured rather than assumed — see slide 6. If asked whether the cancellation is
+        coincidence: we don't know; it is what the data supports, and a₁ is determined tightly
+        enough (95% CI [−12.12, −11.49]) that it isn't an artifact of a loose fit.
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 -->
+  <section class="slide" id="s6">
+    <div class="slide-no">06</div>
+    <div class="slide-body">
+      <h2>What we tried to break</h2>
+      <p class="lede">Every entry was fitted and measured, not argued away. Costs carry their protocol.</p>
+
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Hypothesis</th><th>Result</th><th>Protocol</th></tr></thead>
+          <tbody>
+            <tr><td>Thermally neutral (a₁ = a₂ = 0)</td><td class="bad">8.27 vs 3.66</td><td class="proto">train</td></tr>
+            <tr><td>a₁ = 0 alone — testing our <em>own</em> mechanism</td><td class="bad">+4.54</td><td class="proto">train</td></tr>
+            <tr><td><strong>Parallel A → C path</strong></td><td>train <span class="good">+0.0019</span> for 3 params; CV <span class="bad">−0.352</span> worse</td><td class="proto">train / 10f-CV ×3</td></tr>
+            <tr><td>Flow-dependent U, (Q/Q<sub>ref</sub>)<sup>n</sup></td><td class="bad">n = 0.8 costs +11.40</td><td class="proto">train / profile</td></tr>
+            <tr><td>Free reaction orders n₁, n₂</td><td class="bad">+0.072 (one seed −0.189)</td><td class="proto">10f-CV ×5</td></tr>
+            <tr><td>Axial dispersion (tanks-in-series)</td><td>~0.08 at fixed params</td><td class="proto">train</td></tr>
+            <tr><td>Residual ML corrector</td><td class="bad">+0.027 vs a 0.3 bar</td><td class="proto">10f-CV ×5</td></tr>
+            <tr><td>E₂ = 155 kJ/mol (external audit)</td><td class="bad">+2.62</td><td class="proto">train</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout"><span class="tag">The parallel path deserves a sentence</span>
+        The problem statement calls this a <em>"series-parallel reaction network"</em> while listing
+        only A → B → C. So we fitted the parallel path rather than assume either reading. Three
+        extra parameters buy <strong>0.002</strong> on training error and <strong>lose 0.35</strong>
+        on cross-validation, swinging 5.41 / 8.13 / 6.59 across seeds. That is what fitting noise
+        looks like. <strong>The data supports the series network.</strong>
+      </div>
+
+      <p><strong>The flow result is a positive finding, not just a rejection.</strong> Turbulent
+        heat transfer would give n ≈ 0.8. We measure n ≈ 0, with a 95% interval excluding even
+        0.03 — so the controlling thermal resistance is <em>not on the process side</em>, and flow
+        enters this reactor only through residence time. Actionable: increasing flow will not
+        improve jacket duty.</p>
+
+      <div class="notes"><span class="tag">Presenter notes</span>
+        This is the Robustness criterion. Lead with the A→C row — the problem statement's own
+        wording invites the question and most teams will not have tested it. Emphasise that our
+        A→C integrator is <em>exact</em>, not an approximation: it reduces to the shipped model to
+        5e−12 at k₃→0 and matches SciPy BDF to 9e−04 with k₃ active, so the rejection is not a
+        solver artifact. If challenged on the 0.3 bar, it was pre-registered before running, at
+        roughly one seed-to-seed standard deviation.
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 -->
+  <section class="slide" id="s7">
+    <div class="slide-no">07</div>
+    <div class="slide-body">
+      <h2>Independent replication</h2>
+      <p class="lede">A blind refit: a separate agent given only the data and the problem
+        statement, with no access to our code, parameters, or notes. Different integrator
+        (SciPy LSODA), different optimizer.</p>
+
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Parameter</th><th class="num">Ours</th><th class="num">Blind refit</th></tr></thead>
+          <tbody>
+            <tr><td>E₁ (kJ/mol)</td><td class="num">43.161</td><td class="num">43.156</td></tr>
+            <tr><td>E₂ (kJ/mol)</td><td class="num">250.072</td><td class="num">250.53</td></tr>
+            <tr><td>a₁</td><td class="num">−11.7919</td><td class="num">−11.7961</td></tr>
+            <tr><td>a₂</td><td class="num">+11.3409</td><td class="num">+11.3212</td></tr>
+            <tr><td>U</td><td class="num">3.2552</td><td class="num">3.2554</td></tr>
+            <tr class="ship"><td>train RMSE</td><td class="num">3.6559</td><td class="num">3.6554</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p><strong>Agreement to roughly five significant figures</strong>, from a different numerical
+        stack. It reproduced the falsification too: forcing a₁ = a₂ = 0 gives <strong>8.2679</strong>
+        against our <strong>8.2683</strong>. And the E₂ confidence interval — ours
+        <strong>[233.75, 269.92]</strong>, theirs <strong>[234, 271]</strong>.</p>
+
+      <div class="notes"><span class="tag">Presenter notes</span>
+        This answers "how do we know your optimizer did not just find a convenient local minimum".
+        Two independent implementations landing on the same parameters is far stronger than any
+        single-run diagnostic. Be precise about "blind": the agent could not read our repository,
+        including the README and notes that state E₁ and E₂. If asked why E₂ agrees least well
+        (250.07 vs 250.53) — expected, it is our least tightly determined kinetic parameter, and
+        both values sit comfortably inside both intervals.
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 -->
+  <section class="slide" id="s8">
+    <div class="slide-no">08</div>
+    <div class="slide-body">
+      <h2>Where the error actually lives</h2>
+      <p class="lede">Grouping training rows by how much the <em>data itself</em> disagrees
+        locally — the spread of yields among each row's six nearest neighbours in
+        (log τ, T<sub>in</sub>, T<sub>jacket</sub>).</p>
+
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Neighbour spread</th><th class="num">n</th><th class="num">OOF RMSE</th><th class="num">Share of squared error</th></tr></thead>
+          <tbody>
+            <tr><td>0–20</td><td class="num">47</td><td class="num good">0.652</td><td class="num">0.4%</td></tr>
+            <tr><td>80–101</td><td class="num">44</td><td class="num bad">10.410</td><td class="num bad">91.0%</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="bignum">29% of rows carry 91% of the error
+        <small>And we can say why: it is not that those rows are intrinsically hard — it is that
+        dY/dT is large there.</small></div>
+
+      <p>Grouping instead by sensitivity, the least-sensitive fifth of rows sits at RMSE
+        <strong>0.200</strong> and the most-sensitive fifth at <strong>7.393</strong>. The error
+        tracks sensitivity, exactly as a small input perturbation would produce.</p>
+      <p><strong>Consequence for effort:</strong> further modelling of the well-determined majority
+        cannot move the score. The result is decided by how the cliff-edge rows fall.</p>
+
+      <div class="notes"><span class="tag">Presenter notes</span>
+        This justifies every "we stopped here" decision later. The distinction between "hard rows"
+        and "sensitive rows" is the insight — sensitive rows are where a 2 K input error becomes a
+        20-point yield error, a property of the reactor near its cliff, not a deficiency of the
+        model. It also explains why the tree is blended in only at low predicted yields: that is
+        where the cliff is.
+      </div>
+    </div>
+  </section>
+
+  <!-- 9 -->
+  <section class="slide" id="s9">
+    <div class="slide-no">09</div>
+    <div class="slide-body">
+      <h2>The information limit, at the strength the evidence supports</h2>
+      <p class="lede">We believe we are near the limit of what 150 rows determine. Here is the
+        evidence — and here is where it stops.</p>
+
+      <h3>What we measured</h3>
+      <ul>
+        <li><strong>Residual scales with input sensitivity</strong> — least-sensitive quintile
+          0.200, most-sensitive 7.393. Rules out <em>output</em> noise, which would be uniform.</li>
+        <li><strong>No residual structure</strong> across 104 features and pairwise products
+          (largest |r| = 0.137, expected false positives ≈ 0.2).</li>
+        <li><strong>A median temperature offset of 1.67 K reproduces 138 of 150 rows</strong>, and
+          those offsets are structureless (largest feature correlation 0.206).</li>
+        <li><strong>Smoothing over that offset degrades training error while improving CV</strong> —
+          train 3.6559 → 3.7643, 10f-CV 6.3579 → 5.9279, better on all three seeds. A blur applied
+          to a correct model with clean inputs would hurt CV, not help it.</li>
+      </ul>
+
+      <div class="callout"><span class="tag">What we will not claim</span>
+        <strong>12 of 150 rows cannot be reproduced by any offset within ±25 K</strong> — something
+        else is happening there and we have not identified it. We do <em>not</em> claim the residual
+        is fully accounted for; against 10f-CV 6.36 the non-noise component is roughly 4.7. We do
+        <em>not</em> cite residual unbiasedness as evidence — least squares forces the residual
+        orthogonal to ∂f/∂θ, making it a first-order condition of the optimizer, not a fact about
+        noise. And a caveat against our own conclusion: a small error in E₂ would produce the same
+        dY/dT signature as input noise, so the sensitivity result is <em>consistent with</em> the
+        noise story, not diagnostic of it.
+      </div>
+
+      <div class="notes"><span class="tag">Presenter notes</span>
+        Deliver the second half as deliberately as the first. Volunteering the 12 unexplained rows
+        and the E₂-mimicry caveat is more persuasive than a clean story, and it inoculates against
+        a judge finding them. The load-bearing argument is the train-degrades/CV-improves
+        asymmetry — that one does not depend on the mechanism being input noise, only on the
+        observation that smoothing helps out of sample.
+      </div>
+    </div>
+  </section>
+
+  <!-- 10 -->
+  <section class="slide" id="s10">
+    <div class="slide-no">10</div>
+    <div class="slide-body">
+      <h2>The random forest inside our physics model, declared</h2>
+      <p class="lede">There is a 13% weight on an ExtraTrees model in our submission. We are
+        telling you before you find it.</p>
+      <p><strong>It is variance reduction. It is not bias correction — we tested that and it
+        failed.</strong></p>
+
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Test</th><th class="num">Result</th></tr></thead>
+          <tbody>
+            <tr><td>Sign agreement in the band carrying the entire gain (0.5 &lt; p ≤ 10)</td><td class="num">8 of 13 (62%, p = 0.581)</td></tr>
+            <tr><td>Bar we pre-registered</td><td class="num">≥ 11/13</td></tr>
+            <tr><td>Correlation between physics error and tree error</td><td class="num">+0.070</td></tr>
+            <tr><td>Tree standalone RMSE on those rows</td><td class="num bad">15.04</td></tr>
+            <tr><td>Physics RMSE on those rows</td><td class="num good">6.14</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>A weak, decorrelated estimator improves an ensemble by averaging even when far worse
+        standalone. That is what this is.</p>
+
+      <div class="callout"><span class="tag">The cost, stated</span>
+        Blending introduces <strong>+1.083</strong> of upward bias on the blended rows, and on the
+        56 near-zero rows it <strong>loses −1.55</strong> RMSE. We keep it because the net is
+        <strong>+0.27</strong> across all three held-out seeds, the weight sits on a plateau rather
+        than a peak, and we tested the principled alternative — bagging the physics fit — which
+        recovered only +0.13 and destabilised one seed.
+      </div>
+
+      <p><strong>Why bagging failed is itself a finding.</strong> Bootstrap replicates land in a
+        second optimum on the likelihood surface — one that fits 135 rows at RMSE 2.56 but scores
+        13.05 held out. Our cold-start cross-validation found the same basin independently. Any
+        resampling scheme on this dataset has to be checked for it.</p>
+
+      <div class="notes"><span class="tag">Presenter notes</span>
+        Deliver deliberately; do not get discovered by it. The honest summary: the tree survives on
+        measurement, not elegance — its whole contribution is 13 rows, it is wrong-signed in the
+        mid-range, and it costs bias. We considered dropping it for a cleaner one-mechanism story
+        and decided against discarding a measured +0.27. If a judge says "that's an ML crutch in a
+        physics pitch", agree it is the least elegant part of the model and point at the
+        pre-registered bar we tested it against.
+      </div>
+    </div>
+  </section>
+
+  <!-- 11 -->
+  <section class="slide" id="s11">
+    <div class="slide-no">11</div>
+    <div class="slide-body">
+      <h2>What we got wrong</h2>
+      <p class="lede">Six claims we made, and what falsified them.</p>
+
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>We claimed</th><th>What falsified it</th><th>What we say now</th></tr></thead>
+          <tbody>
+            <tr><td>"The tree corrects the ODE's systematic bias"</td><td>Sign test: no significant alignment</td><td>Variance reduction from a decorrelated component</td></tr>
+            <tr><td>"Residuals are unbiased, therefore noise"</td><td>Least squares <em>forces</em> orthogonality to ∂f/∂θ</td><td>Near-vacuous. Demoted, not quoted</td></tr>
+            <tr><td>"Yields reach 99.97%, so a parallel path is excluded"</td><td>Only bounds k₃ at that row's 383 K; data spans to 548 K</td><td>Replaced with a fitted measurement</td></tr>
+            <tr><td>"ln k₃ goes to its bound, CV delta 0.0003"</td><td>Never measured. When measured: k₃ is seed-dependent, delta is −0.352</td><td>The fit rejects A→C on generalization</td></tr>
+            <tr><td>First errors-in-variables run showed structure</td><td>A bug silently dropped all 41 well-fit rows</td><td>Fixed: 138/150 explained, structureless</td></tr>
+            <tr><td>Notebook hardcoded σ = 2.5 after the policy moved to 1.67</td><td>Re-execution produced a different submission hash</td><td>Policy read from <code>blend.json</code>; both paths verified identical</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout"><span class="tag">Two deserve emphasis</span>
+        <p style="margin:0 0 10px"><strong>The 99.97% argument reached the right conclusion by
+        invalid reasoning.</strong> A parallel path <em>is</em> excluded — but not for the reason we
+        gave. That is the difference between a measurement and a lucky assertion, and we count it
+        as an error even though the answer survived.</p>
+        <p style="margin:0"><strong>The EIV bug was found only after we saw a result we
+        disliked.</strong> The fix is correct on its merits and we would defend it independently.
+        But the search for it was motivated, and that is worth disclosing rather than presenting
+        the corrected result as if it arrived clean.</p>
+      </div>
+
+      <div class="notes"><span class="tag">Presenter notes</span>
+        Highest-risk, highest-reward slide. Deliver without hedging or apology — the framing is
+        "here is our error-correction process working", not "here are our failures". The EIV
+        disclosure in particular is the kind of thing a careful judge respects precisely because we
+        did not have to say it. Don't let it run long: one sentence each, then move.
+      </div>
+    </div>
+  </section>
+
+  <!-- 12 -->
+  <section class="slide" id="s12">
+    <div class="slide-no">12</div>
+    <div class="slide-body">
+      <h2>Result, and what it would take to deploy</h2>
+      <div class="bignum">LOSO 5.671 — against 16.37 for the best tree ensemble
+        <small>Physics predictions noise-averaged over σ = 1.67 K, blended 0.87 / 0.13 with the
+        tree below a predicted yield of 60, pure physics above.</small></div>
+
+      <h3>Speed — measured, not asserted</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>150 rows</th><th class="num">Time</th></tr></thead>
+          <tbody>
+            <tr><td>Our surrogate (512 substeps)</td><td class="num good">24.8 ms</td></tr>
+            <tr><td>SciPy BDF reference solve</td><td class="num">5573 ms</td></tr>
+            <tr class="ship"><td>Speed-up</td><td class="num">225×</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>…and they agree to 0.017 yield-points. The original BVP simulation is, in the problem
+        statement's own words, <em>"computationally expensive and too slow for real-time plant
+        optimization"</em> — we do not quote a runtime for it, because none is published.</p>
+
+      <h3>What deployment actually needs</h3>
+      <ul>
+        <li><strong>It extrapolates</strong>, because it is the mechanism. A tree cannot predict
+          past its outermost split; an ODE integrates whatever conditions you hand it.</li>
+        <li><strong>It is inspectable.</strong> A plant engineer can check E₁ and E₂ against known
+          kinetics and reject the model on chemistry, not on a validation curve.</li>
+        <li><strong>It states its own operating limit.</strong> Keep the reactor below
+          <strong>449.9 K</strong> or selectivity collapses.</li>
+        <li><strong>Honest limit:</strong> 150 rows, one reactor geometry. Tube diameter is constant
+          across all rows, so it folds into the fitted pre-exponentials and into U. A different tube
+          requires a refit, not a retune.</li>
+      </ul>
+
+      <div class="notes"><span class="tag">Presenter notes</span>
+        Close on the crossover temperature, not the RMSE — the RMSE wins Phase 1 and the crossover
+        wins Phase 2. The 225× is measured end-to-end against a solver we verify against, so it is
+        defensible as like-for-like; be careful not to imply it is 225× faster than the organisers'
+        original simulation, which we have never timed. If asked about scale-up, the diameter caveat
+        is the honest answer and volunteering it beats being asked.
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div>Team <em>Claude ke Chatore</em> · submission <code>claude_ke_chatore.csv</code>
+      · sha256 <code>c68e0e748e4928f2</code> · 50 rows, one column <code>overall_yield</code></div>
+    <div>Verify with <code>python scripts/audit_pitch.py</code> — it reads every figure above live
+      from <code>artifacts/</code> and exits non-zero on any drift.</div>
+  </footer>
+</div>
+
+<script>
+(function () {
+  // ---- presenter notes toggle ----
+  var nb = document.getElementById('notesBtn');
+  nb.addEventListener('click', function () {
+    var on = document.body.classList.toggle('hide-notes');
+    nb.setAttribute('aria-pressed', String(!on));
+    nb.textContent = 'Presenter notes: ' + (on ? 'off' : 'on');
+  });
+
+  // ---- theme toggle (explicit choice beats the OS in both directions) ----
+  document.getElementById('themeBtn').addEventListener('click', function () {
+    var root = document.documentElement;
+    var explicit = root.getAttribute('data-theme');
+    var dark = explicit
+      ? explicit === 'dark'
+      : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    root.setAttribute('data-theme', dark ? 'light' : 'dark');
+    drawArrhenius();
+  });
+
+  // ---- Arrhenius plot, from the fitted parameters ----
+  var LN_K1 = 2.718739542774161, E1 = 43161.27219874831;
+  var LN_K2 = 0.15940771227404235, E2 = 250072.4920452807;
+  var R = 8.314, TREF = 430, TCROSS = 449.894, TMIN = 360, TMAX = 550;
+
+  function log10k(lnk, E, T) {
+    return (lnk - (E / R) * (1 / T - 1 / TREF)) / Math.LN10;
+  }
+
+  function css(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  function drawArrhenius() {
+    var cv = document.getElementById('arrhenius');
+    if (!cv) return;
+    var dpr = window.devicePixelRatio || 1;
+    var W = cv.clientWidth || 900, H = 380;
+    cv.width = W * dpr; cv.height = H * dpr;
+    var g = cv.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, W, H);
+
+    var ink = css('--ink'), mute = css('--ink-mute'), rule = css('--rule');
+    var accent = css('--accent'), hot = css('--hot'), surf = css('--surface');
+    var mono = '11px ' + css('--mono').split(',')[0].replace(/"/g, '') + ', monospace';
+
+    var L = 54, Rp = 16, T = 18, B = 34;
+    var pw = W - L - Rp, ph = H - T - B;
+    var YMIN = -6, YMAX = 7;
+    var x = function (t) { return L + (t - TMIN) / (TMAX - TMIN) * pw; };
+    var y = function (v) { return T + (YMAX - v) / (YMAX - YMIN) * ph; };
+
+    g.fillStyle = surf; g.fillRect(L, T, pw, ph);
+
+    // regime shading: right of the crossover, the waste reaction wins
+    g.fillStyle = hot; g.globalAlpha = 0.07;
+    g.fillRect(x(TCROSS), T, x(TMAX) - x(TCROSS), ph);
+    g.globalAlpha = 1;
+
+    // grid
+    g.strokeStyle = rule; g.lineWidth = 1; g.font = mono; g.fillStyle = mute;
+    for (var v = YMIN; v <= YMAX; v += 2) {
+      g.beginPath(); g.moveTo(L, y(v) + .5); g.lineTo(L + pw, y(v) + .5); g.stroke();
+      g.textAlign = 'right'; g.textBaseline = 'middle';
+      g.fillText('1e' + v, L - 8, y(v));
+    }
+    for (var t = 375; t <= TMAX; t += 25) {
+      g.beginPath(); g.moveTo(x(t) + .5, T); g.lineTo(x(t) + .5, T + ph); g.stroke();
+      g.textAlign = 'center'; g.textBaseline = 'top';
+      g.fillText(t + ' K', x(t), T + ph + 8);
+    }
+
+    function curve(lnk, E, color, width) {
+      g.beginPath();
+      for (var i = 0; i <= 400; i++) {
+        var t = TMIN + (TMAX - TMIN) * i / 400;
+        var v = Math.max(YMIN, Math.min(YMAX, log10k(lnk, E, t)));
+        i ? g.lineTo(x(t), y(v)) : g.moveTo(x(t), y(v));
+      }
+      g.strokeStyle = color; g.lineWidth = width; g.lineJoin = 'round'; g.stroke();
+    }
+    curve(LN_K1, E1, accent, 2.5);
+    curve(LN_K2, E2, hot, 2.5);
+
+    // crossover marker
+    var yc = y(log10k(LN_K1, E1, TCROSS));
+    g.setLineDash([4, 4]); g.strokeStyle = ink; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(x(TCROSS), T); g.lineTo(x(TCROSS), T + ph); g.stroke();
+    g.setLineDash([]);
+    g.fillStyle = ink;
+    g.beginPath(); g.arc(x(TCROSS), yc, 4.5, 0, Math.PI * 2); g.fill();
+
+    g.textAlign = 'left'; g.textBaseline = 'bottom'; g.font = mono; g.fillStyle = ink;
+    g.fillText('k₁ = k₂  at  449.9 K', x(TCROSS) + 8, T + 14);
+
+    // series labels
+    g.fillStyle = accent; g.textAlign = 'left'; g.textBaseline = 'middle';
+    g.fillText('k₁  A→B   E = 43.16 kJ/mol', L + 10, y(log10k(LN_K1, E1, 370)) - 14);
+    g.fillStyle = hot;
+    g.fillText('k₂  B→C   E = 250.07 kJ/mol', L + 10, y(-4.6));
+
+    g.fillStyle = mute; g.textAlign = 'right'; g.textBaseline = 'bottom';
+    g.fillText('selectivity collapses →', L + pw - 8, T + ph - 8);
+
+    g.strokeStyle = rule; g.strokeRect(L + .5, T + .5, pw, ph);
+  }
+
+  drawArrhenius();
+  window.addEventListener('resize', drawArrhenius);
+  var mq = window.matchMedia('(prefers-color-scheme: dark)');
+  (mq.addEventListener ? mq.addEventListener.bind(mq, 'change') : mq.addListener.bind(mq))(drawArrhenius);
+})();
+</script>

@@ -403,11 +403,16 @@ print(f"\\nmean out-of-sample gain: {np.mean(gains):+.3f} RMSE")
 The gain is consistent across every held-out seed and the weight is stable (0.88–0.92), so
 this is a real improvement rather than a weight fitted to noise.
 
-Note what the 9% is doing: it is not "insurance" in the usual hand-wavy sense. The tree is
-2.8× less accurate overall, but its errors are *differently distributed* — it interpolates
-locally where our ODE carries a small systematic bias, so a small weight cancels part of
-that bias. A large weight would immediately reimport the tree's own much larger error, which
-is why the optimum is near 0.9 and not near 0.5.
+What is the tree contributing? We tested the obvious explanation — that it corrects local
+bias in the ODE — and it **failed**. In the stratum where the tree helps, the direction it
+pulls agrees with the direction that would reduce error on 22 of 42 rows (52%, p = 0.88), a
+coin flip; its mean pull is +11.5 where the physics needs −0.3 on average.
+
+What it does have is **decorrelated error** — correlation with the physics model's errors is
+just +0.07. A weak but decorrelated component reduces an ensemble's variance even when it is
+far worse standalone (15.0 vs 6.1 RMSE on these rows). So the honest description is *variance
+reduction*, not bias correction. It is also why the optimum weight sits near 0.87 rather than
+0.5: beyond that the tree's own much larger error dominates.
 
 ### 4d. …but a single global weight hides a defect
 
@@ -417,7 +422,7 @@ gets essentially perfect, and again at the top, where a tree cannot extrapolate 
 outermost split and can only pull predictions toward the training mean.
 """),
     code("""
-BLEND_CUTOFF = 60.0     # above this physics prediction the tree is dropped entirely
+BLEND_CUTOFF = 60.0     # default; the shipped value is read from blend.json
 
 def apply_blend(physics, tree, weight, cutoff=BLEND_CUTOFF):
     \"\"\"Regime-aware blend: mix below `cutoff`, pure physics above it.\"\"\"
@@ -684,29 +689,46 @@ print(f"  RMSE it would produce  {np.sqrt((sim_spread**2).mean()):.3f}")
 print(f"  our actual residual    {np.sqrt((resid**2).mean()):.3f}   <- noise model slightly OVERSHOOTS")
 """),
     md("""
-Three things follow, and together they are decisive:
+Three things follow:
 
 1. The least-sensitive fifth of the data sits at RMSE **0.20**; the most sensitive at
-   **7.39** — a 37× spread explained entirely by how steeply yield responds to temperature.
-2. Residuals are **unbiased** in every band (mean −1.14 against a standard deviation of 7.30
-   in the worst one, t = −0.84). Missing physics biases a regime; noise scatters about it.
-3. Injecting ~2 K of temperature noise reproduces — in fact slightly **overshoots** — the
-   total error we actually observe.
+   **7.39**. That rules out noise on the *output* — but it does **not** by itself separate
+   input noise from a small error in the temperature channel, since a slightly wrong E₂
+   would produce the same signature.
+2. A scan of ~100 feature terms and pairwise products finds no residual structure at all
+   (largest |r| = 0.14), and solving for the per-row temperature offset that reproduces each
+   observation exactly gives a **median of 1.67 K** with no structure either.
+3. Decisively: **averaging the model over that noise improves held-out error while making
+   the training fit worse** (next section). Blurring a correct model with clean inputs would
+   hurt cross-validation, not help it.
 
-Add that a scan of ~100 feature terms and pairwise products finds no residual structure at
-all (largest |r| = 0.14), and the conclusion is that **the model is at the noise floor of
-the data**. The remaining 3.66 is roughly 2 K of temperature error amplified through a steep
-response, not a mechanism we failed to find. Chasing it with more parameters would be
-fitting noise.
+*What does not fit:* the fitted offsets have a heavy tail (99th percentile 22 K) and 12 of
+150 rows cannot be reproduced by any offset within ±25 K. So a minority of rows carry
+something that is not temperature noise — we do not claim the cross-validated error is
+irreducible.
 
-This also explains section 6b: those rows dominate the error not because they are
-intrinsically harder, but because dYield/dT is largest there.
-
-*Stated honestly:* a model error that happened to be both zero-mean **and** proportional to
-temperature sensitivity would mimic this. Three independent lines agreeing makes that an
-uncomfortable coincidence, but it is not a proof.
+We deliberately do **not** cite "the residuals are unbiased" as evidence. Least squares
+forces the residual orthogonal to ∂f/∂θ, so a small mean residual is a property of the
+optimizer, not a finding about noise.
 """),
     md("""
+### 6b-ii-b. What noise-averaging costs, stated plainly
+
+Averaging over the input distribution is not free. It slightly worsens one boundary: the edge
+of the dead regime, where a row sitting just off zero gets lifted. The worst case in our
+out-of-fold predictions is **training row 97 — true 0.282, raw model 0.000, smoothed 2.549.**
+
+That row is worth looking at rather than burying, because it is the *right* kind of failure.
+Interior dead-regime rows are exactly 0.000 — all 15 training rows with jacket > 520 K and
+τ > 0.2 are exact zeros. A truth of 0.282 means row 97 is an **edge** row, not an interior
+one, so the model is correctly expressing uncertainty about where the cliff falls and has
+simply overshot on this instance.
+
+The trade is roughly **5 squared-error units lost against 616 recovered**. We did not add a
+dead-regime guard to suppress it: that would be a third tuned rule bolted onto a mechanism
+that is already physically justified, and we have spent this project removing exactly that
+pattern.
+
 ### 6b-iii. So how much of the final score is luck?
 
 Bootstrapping 50-row draws from our out-of-fold predictions gives the distribution of scores
@@ -765,11 +787,25 @@ def write_submission(preds, team_name, out_dir=ROOT):
 
 # SUBMIT_STEPS (not DEFAULT_STEPS): at 512 substeps individual predictions still
 # move ~0.22 yield-points, and the finer grid scores better. Costs ~90 ms once.
-phys = integrate(fitted, ode_inputs(test), n_steps=SUBMIT_STEPS)
+NOISE_SIGMA_K = blend.get("sigma", 1.67)   # policy read from the artifact, never hardcoded
+def predict_smoothed(x, df, sigma=NOISE_SIGMA_K, n_nodes=7, n_steps=DEFAULT_STEPS):
+    \"\"\"E[f(x+delta)], delta ~ N(0, sigma^2) on both temperatures (Gauss-Hermite).\"\"\"
+    if sigma <= 0:
+        return integrate(x, ode_inputs(df), n_steps=n_steps)
+    nodes, wts = np.polynomial.hermite_e.hermegauss(n_nodes); wts = wts / wts.sum()
+    acc = np.zeros(len(df))
+    for t, w in zip(nodes, wts):
+        d = df.copy()
+        d["inlet_temperature_K"] += sigma * t
+        d["jacket_temperature_K"] += sigma * t
+        acc += w * integrate(x, ode_inputs(d), n_steps=n_steps)
+    return acc
+
+phys = predict_smoothed(fitted, test, n_steps=SUBMIT_STEPS)
 # Tree averaged over the same seeds the out-of-fold predictions used -- a
 # single-seed tree is a noisier estimator than the one w was chosen against.
 tree = np.mean([tree_predict(train, test, seed=s) for s in (0, 1, 2)], axis=0)
-final = apply_blend(phys, tree, blend["weight"])   # regime-aware, see section 4d
+final = apply_blend(phys, tree, blend["weight"], blend.get("cutoff", BLEND_CUTOFF))
 
 path = write_submission(final, "claude_ke_chatore")
 n_mixed = int((phys <= BLEND_CUTOFF).sum())

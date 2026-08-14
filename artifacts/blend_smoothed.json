@@ -1,0 +1,8 @@
+{
+  "sigma": 2.5,
+  "weight": 0.89,
+  "cutoff": 60.0,
+  "oof_rmse": 5.434558448830408,
+  "pure_smoothed_oof": 5.597459673815831,
+  "blend_gain_loso": 0.18544291730076998
+}

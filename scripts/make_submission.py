@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.baseline import fit_predict
 from src.data import ROOT, TARGET, load_test, load_train, rmse, write_submission
 from src.evaluate import BLEND_CUTOFF, apply_blend
-from src.physics import SUBMIT_STEPS, predict
+from src.physics import NOISE_SIGMA_K, SUBMIT_STEPS, predict, predict_smoothed
 
 ARTIFACTS = ROOT / "artifacts"
 # Team name is "Claude ke Chatore". The file is written with underscores rather
@@ -35,6 +35,8 @@ def main() -> int:
                     help="seeds averaged for the tree component; match run_physics_cv.py")
     ap.add_argument("--cutoff", type=float, default=BLEND_CUTOFF,
                     help="above this physics prediction the tree is dropped entirely")
+    ap.add_argument("--sigma", type=float, default=NOISE_SIGMA_K,
+                    help="temperature-noise scale for noise-averaged prediction; 0 disables")
     ap.add_argument("--weight", type=float, default=None, help="override physics weight")
     args = ap.parse_args()
 
@@ -42,10 +44,16 @@ def main() -> int:
     meta = json.loads((ARTIFACTS / f"{args.params}.json").read_text())
     x = meta["vector"]
 
-    phys_test = predict(x, test, n_steps=SUBMIT_STEPS)
-    phys_train = predict(x, train, n_steps=SUBMIT_STEPS)
+    # Noise-averaged: predict E[f(x_true)|x_observed] rather than f(x_observed).
+    # This deliberately worsens the training fit and improves held-out error.
+    phys_test = predict_smoothed(x, test, args.sigma, n_steps=SUBMIT_STEPS)
+    phys_train = predict_smoothed(x, train, args.sigma, n_steps=SUBMIT_STEPS)
+    raw_train = predict(x, train, n_steps=SUBMIT_STEPS)
     print(f"physics params: {args.params}  ({SUBMIT_STEPS} substeps, "
-          f"train RMSE {rmse(train[TARGET], phys_train):.4f})")
+          f"noise-averaged sigma={args.sigma:.1f} K)")
+    print(f"  train RMSE {rmse(train[TARGET], phys_train):.4f} smoothed "
+          f"vs {rmse(train[TARGET], raw_train):.4f} raw "
+          f"(worse on train, better out-of-sample -- that is the point)")
 
     final = phys_test
     w = 1.0

@@ -211,16 +211,43 @@ Recovered: E1 = 43.2, E2 = 250.1 kJ/mol, a1 = −11.79, a2 = +11.34 K·L/mol, U 
 `check_bounds.py` refit with the box widened to E1∈[5,400], E2∈[20,600] and landed on the
 same values with nothing at a constraint — the activation energies are real, not artifacts.
 
-Blend search returns **w = 0.910** on physics, validated leave-one-seed-out (+0.241 vs pure
-physics, positive on all three seeds; w stable at 0.878–0.919).
+## The shipped prediction policy: (sigma, weight, cutoff) = (1.67 K, 0.87, 60)
 
-**But a single global weight hid a defect.** Broken down by prediction stratum the tree
-*helps* mid-range and *hurts* at both ends — worst on the near-zero rows the physics gets
-almost exactly right (0.319 → 1.319 RMSE over 57 rows), and again at the top where a tree
-cannot extrapolate. The shipped rule is therefore **regime-aware**: blend below a predicted
-yield of 60, pure physics above (`BLEND_CUTOFF` and `apply_blend` in `src/evaluate.py`).
-Leave-one-seed-out: 6.022 vs 6.105 flat, better on all three seeds, and it restores the top
-of the range (97.7 vs 96.6).
+All three are chosen **jointly** (`scripts/joint_policy.py`) — optimising down a chain lands
+wherever the ordering happens to put you. Leave-one-seed-out on the whole triple:
+**6.022 → 5.671, better on all three held-out seeds.**
+
+**σ is fixed a priori at 1.67 K**, the errors-in-variables median from `scripts/eiv_noise.py`
+— *not* tuned on the CV that then judges it. That matters: the in-sample argmax (σ = 2.0)
+scores 5.640, but quoting that would be reporting a gain measured at its own optimum. Only
+the physics component is smoothed; the tree is fit on observed inputs and is already
+implicitly averaged over them, so blurring it too would double-count the noise.
+
+**A single global weight hid a defect.** By prediction stratum the tree *helps* mid-range and
+*hurts* at both ends — worst on the near-zero rows the physics gets almost exactly right, and
+again at the top where a tree cannot extrapolate. Hence the **regime-aware** rule: blend below
+a predicted yield of 60, pure physics above (`BLEND_CUTOFF` / `apply_blend` in
+`src/evaluate.py`). The cutoff came out at 60 in every leave-one-seed-out fold.
+
+**The tree's 13% is variance reduction, not bias correction** — tested, and the bias claim
+failed. In the stratum where the tree helps, the direction it pulls agrees with the direction
+that would reduce error on only **22 of 42 rows (52%, p = 0.88)** — a coin flip. Its mean pull
+is **+11.5** where the physics needs **−0.3** on average. What it does have is decorrelated
+error (correlation with the physics error **+0.070**), and a weak decorrelated component
+improves an ensemble by averaging even when far worse standalone (15.0 vs 6.1 RMSE on the
+blended rows). Say "variance reduction from a decorrelated component", never "it corrects the
+ODE's bias".
+
+*(Beware `corr(tree − physics, y − physics)`: both share `− physics`, so it is spuriously
+high. The sign test is the clean statistic.)*
+
+**Known cost, accepted deliberately.** Noise-averaging slightly worsens the dead-regime edge:
+one training row (index 97, true **0.282**, raw 0.000 → smoothed 2.549) is lifted off zero.
+That row is an *edge* row, not an interior one — interior dead rows are exactly 0.000 (15/15
+hot-regime training rows), so a non-zero truth means smoothing is correctly expressing cliff
+uncertainty and merely overshot. Cost ≈ 5 squared-error units against ≈ 616 recovered. No
+dead-regime guard was added: that would be a third tuned rule on a mechanism that is already
+physically justified.
 
 `make_submission.py` applies this by default (`--no-blend` for pure physics, `--cutoff` to
 override) and averages the tree over seeds 0–2 to match the estimator w was chosen against.
@@ -322,32 +349,51 @@ look identical without it.**
 own activation energy it can be negligible at 383 K and significant at 516 K. The argument
 was locally true and globally invalid.
 
-## The residual is input noise, not model-form error
+## Input noise: what is measured, what is inferred
 
-This corrects an earlier framing that ran through the whole project ("the data is
-deterministic simulator output, so the theoretical best RMSE is ~0, and any error is *our*
-modelling error"). **That was wrong**, and it made every plateau look like a failure to find
-missing physics. Three independent lines of evidence:
+An earlier framing ran through the whole project — "the data is deterministic simulator
+output, so the theoretical best RMSE is ~0, and any error is *our* modelling error." That
+was wrong and made every plateau look like missing physics. But the replacement claim ("we
+are at the noise floor") was also overstated. What actually holds:
 
-1. **Residual scales with temperature sensitivity.** Binning training rows by |dYield/dT|:
-   the least-sensitive quintile has RMSE **0.200**, the most-sensitive **7.393**. The implied
-   temperature error is consistent across quintiles at **~2–4 K** (median 2.24 K).
-2. **Residuals are unbiased.** In the most-sensitive quintile the mean residual is −1.14
-   against a std of 7.30 (t = −0.84, not significant), and the sign split is 12+/18−. Genuine
-   model-form error would bias a regime, not scatter symmetrically about it.
-3. **A noise model reproduces the magnitude.** Injecting N(0, 2.24 K) into both temperatures
-   yields RMSE **4.29** against our actual **3.66** — the noise model slightly *overshoots*,
-   so ~1.9 K accounts for all of it.
+**Strong evidence (measured):**
+- **Noise-averaging improves held-out error.** Predicting `E[f(x+δ)]` with δ ~ N(0, σ²) on
+  both temperatures moves 10-fold CV from **6.358 → 5.874** at σ = 2.5 K, better on all
+  three seeds, while making the *training* fit worse (3.656 → 3.867). Blurring a correct
+  model with clean inputs would hurt CV, not help it. This is the single strongest result
+  (`scripts/noise_averaged.py`).
+- **No residual structure.** A scan over ~104 features and pairwise products finds nothing
+  (largest |r| = 0.137, expected false positives ≈ 0.2).
+- **Errors-in-variables offsets are structureless.** Solving for the per-row temperature
+  offset that reproduces each observation exactly (`scripts/eiv_noise.py`) gives median
+  |Δ| = **1.67 K** with largest feature correlation 0.206.
 
-Add the residual scan finding no structure across ~104 feature terms (largest |r| = 0.137),
-and the conclusion is that **the model is at the noise floor**. Chasing the remaining 3.66
-with more mechanism is chasing noise. This also re-explains the error concentration below:
-those rows dominate not because they are "hard" but because dYield/dT is large there and
-input noise is amplified.
+**Weak or superseded evidence — do not lean on these:**
+- ~~Residuals are unbiased~~. Least squares drives the residual orthogonal to ∂f/∂θ, so a
+  small mean residual is a **first-order condition of the optimizer**, not evidence about
+  noise. This was wrongly presented as an independent pillar.
+- **Sensitivity-scaling rules out *output* noise but cannot separate input noise from
+  misspecification in the temperature channel** — a small error in E₂ produces the same
+  dYield/dT signature. It is consistent with the noise story, not diagnostic of it.
 
-Caveat worth stating honestly: a model error that happened to be both zero-mean *and*
-proportional to temperature sensitivity would mimic this. Three lines pointing the same way
-makes that a strong coincidence, but it is not a proof.
+**What does not fit a clean noise model.** The EIV offsets have std **5.53 K** with a 99th
+percentile of **22 K**, and **12 of 150 rows** cannot be reproduced by any offset within
+±25 K. A σ ≈ 2 K Gaussian would have a 99th percentile near 5 K. So a minority of rows carry
+something that is not temperature noise.
+
+**Arithmetic reconciliation.** Injecting N(0, 2.24 K) produces a *train-equivalent*
+prediction spread of 4.29. Compared against CV 6.358, the non-noise component is
+`sqrt(6.358² − 4.29²) ≈ 4.7`; against the smoothed CV 5.874 it is ≈ 4.0. That remainder is
+parameter-estimation variance (7 parameters from 135 rows, with the cliff-region parameters
+weakly determined — see the cold-fold spreads) plus whatever the 12 unreachable rows are.
+**Do not claim CV is irreducible.**
+
+**Assumption, flagged as such.** Noise-averaged prediction is optimal *only if* the hidden
+targets are `f(true inputs)` while we are given noisy inputs. The evidence is indirect — the
+training residual is non-zero, so something differs between the published inputs and
+whatever generated the targets, but that could be misspecification instead. The empirical
+case does not depend on the mechanism: smoothing improves honest held-out error by 0.48, and
+CV is a faithful proxy for the test set under either explanation.
 
 ## Out of scope (rubric explicitly penalizes brute force)
 

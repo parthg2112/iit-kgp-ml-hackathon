@@ -1,6 +1,6 @@
 {
-  "weight": 0.91,
-  "oof_rmse_at_weight": 5.710539767983547,
+  "weight": 0.87,
+  "oof_rmse_at_weight": 5.434558448830408,
   "physics_cv": {
     "mean": 6.357903023659392,
     "std": 0.12372589919425984,
@@ -77,5 +77,8 @@
     0,
     1,
     2
-  ]
+  ],
+  "cutoff": 60.0,
+  "sigma": 1.67,
+  "note": "JOINT re-derivation. sigma fixed a priori at the errors-in-variables median (1.67 K), NOT tuned on this CV. w and cutoff chosen jointly with it. LOSO 5.671 vs 6.022 for the previous policy, better on all 3 seeds."
 }

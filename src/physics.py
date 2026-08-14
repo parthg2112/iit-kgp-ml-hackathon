@@ -225,6 +225,42 @@ def predict(x, df, n_steps: int = DEFAULT_STEPS) -> np.ndarray:
     return integrate(x, ode_inputs(df), n_steps=n_steps)
 
 
+# Temperature-noise scale used when averaging predictions over the input distribution.
+# Fixed A PRIORI at the errors-in-variables median (scripts/eiv_noise.py), NOT tuned on
+# the CV it is then judged by. Cross-validation only confirms it: pure-physics OOF
+# 6.358 -> 5.935, and the full policy 6.022 -> 5.671, better on all three held-out seeds.
+NOISE_SIGMA_K = 1.67
+
+
+def predict_smoothed(x, df, sigma: float = NOISE_SIGMA_K, n_nodes: int = 7,
+                     n_steps: int = DEFAULT_STEPS) -> np.ndarray:
+    """E[f(x + delta)] with delta ~ N(0, sigma^2) applied to both temperatures.
+
+    If the hidden targets were generated from inputs that differ from the published ones by
+    a small temperature error, then under squared loss the optimal prediction is the model
+    *averaged over* that error rather than evaluated at the observed inputs. The two differ
+    only where the response is curved -- which is exactly the yield cliff.
+
+    Gauss-Hermite quadrature; 7 nodes is ample for a smooth response. Note this makes the
+    training fit slightly *worse* (3.656 -> 3.867) while improving held-out error, which is
+    the opposite of what overfitting looks like.
+    """
+    from .data import ode_inputs
+
+    if sigma <= 0:
+        return integrate(x, ode_inputs(df), n_steps=n_steps)
+
+    nodes, weights = np.polynomial.hermite_e.hermegauss(n_nodes)
+    weights = weights / weights.sum()
+    acc = np.zeros(len(df))
+    for t, w in zip(nodes, weights):
+        d = df.copy()
+        d["inlet_temperature_K"] = d["inlet_temperature_K"] + sigma * t
+        d["jacket_temperature_K"] = d["jacket_temperature_K"] + sigma * t
+        acc += w * integrate(x, ode_inputs(d), n_steps=n_steps)
+    return acc
+
+
 # Parameter sets whose integration has not converged at the working step count
 # get this residual instead of their (meaningless) predictions. Without it the
 # optimizer happily minimizes integration error in stiff corners -- observed as

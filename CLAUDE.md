@@ -465,10 +465,57 @@ Each was fitted and measured, not argued away:
 
 | Hypothesis | Result |
 |---|---|
+| **Better ensemble member (features + learner sweep)** | **Rejected.** 18 combinations: best improves the projected blend by **+0.021** against a 0.3 bar. See below |
 | Flow-dependent jacket U, `(Q/Q_ref)^n` | n ≈ −0.03, inactive; +0.015 RMSE for one extra param |
 | Thermally neutral reactions | 8.27 vs 3.66 — clearly worse |
 | Parallel A→C path | **Now measured** (`scripts/pitch_evidence.py`). Fitted with `ln_k3_ref, E3_kJ, a3` free: train 3.6540 vs 3.6559 — 3 extra parameters buy **+0.0019**. 10f-CV over 3 seeds is **6.7103 vs 6.3579, i.e. −0.352 worse**, and unstable (5.41 / 8.13 / 6.59). Rejected on generalization |
 | Axial dispersion (tanks-in-series) | At *fixed* params worth only ~0.08 RMSE. Larger apparent gains came from refitting against the coarse cascade's discretization error — same failure mode as the step-drift bug |
+
+### The second ensemble member is already near its ceiling — do not re-litigate
+
+`src/features.py` · `scripts/eval_features.py` · `scripts/eval_learners.py` ·
+`artifacts/feature_eval.json`, `learner_eval.json`.
+
+**The question.** Feature engineering cannot touch the ODE — it has physical parameters, not
+features. It can only improve the **tree component**, so the real question is whether a
+better second member justifies more weight. Ensemble algebra reproduces our shipped result
+exactly (physics 6.36, tree 16.37, ρ = 0.070 → w\* = 0.887 vs our 0.87, predicted +0.30 vs
+measured +0.28), and it says a member at RMSE 8 would be worth **+1.2**.
+
+**Nothing gets near RMSE 8.** Across 6 model families × 3 feature sets (pooled OOF, 5 seeds):
+
+| model / features | standalone | ρ | projected blend |
+|---|---|---|---|
+| KernelRidge RBF / reaction 19 | 15.87 | 0.129 | **5.762** |
+| GP (RBF + white) / reaction 19 | 15.87 | 0.134 | 5.768 |
+| **ExtraTrees / shipped 13 (SHIPPED)** | 16.37 | 0.134 | **5.783** |
+| kNN k=5 / reaction 19 | 18.41 | 0.106 | 5.800 |
+| Ridge / shipped 13 | 30.78 | 0.113 | 5.916 |
+
+Best gain **+0.021** against a 0.3 bar. The whole projected-blend range is 5.762–5.916, and
+ρ never leaves 0.106–0.209. **The tree at 16.37 is already close to optimal as an ensemble
+member.**
+
+**Two things that look like leads and are not:**
+
+1. **The closed-form isothermal yield `Y_iso` is our strongest single feature and still does
+   not help.** `Y_iso = 100·k1/(k2−k1)·(exp(−k1τ) − exp(−k2τ))` correlates **+0.778** overall
+   and **+0.669 within the alive rows** (vs +0.458 for `log_tau`, −0.271 for `T_avg`). Adding
+   it makes ExtraTrees *worse* (16.37 → 17.94 → 19.15 as more are added), and **replacing**
+   the feature set with a small physical one is worse still (7 features → 19.16, 1 feature →
+   33.99). It is not dilution — more of the existing features is simply better for this
+   learner. Crucially the feature is fine, not the problem: a *linear* fit on `Y_iso` alone
+   gets 24.04 where ExtraTrees gets 33.99, because at `min_samples_leaf=1` on one column the
+   tree is effectively 1-NN.
+2. **Trial activation energies do not bracket the fit.** `TRIAL_E = (60, 100, 160)` kJ/mol
+   while E1 = 43.16 and E2 = 250.07 — *both outside the span*, so the comment claiming a tree
+   can "pick whichever is closest" is false. Widening it is leak-free and was tested inside
+   the reaction feature block; it changes nothing (see the table).
+
+**Why this is the right place to stop.** 29% of rows carry 91% of the squared error, all at
+the cliff, and no estimator in this sweep helps there. The bootstrapped 50-row sampling band
+is [2.41, 9.07] — roughly 100× the best available gain here. Further work on the second
+member is noise-chasing.
 
 The self-recovery test in `diagnose_fit.py` is the tool that made these calls trustworthy:
 it regenerates targets from the fitted parameters and refits from scratch. It recovers all

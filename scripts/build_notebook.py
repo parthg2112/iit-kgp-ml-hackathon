@@ -60,7 +60,7 @@ def code(source):
 
 CELLS = [
     md("""
-# Reactor Yield Surrogate — Team *Claude ke Chatore*
+# Reactor Yield Surrogate — Team *Claude ke Chhatore*
 
 **Predictive Modeling Optimization Challenge**
 
@@ -884,7 +884,7 @@ phys = predict_smoothed(fitted, test, n_steps=SUBMIT_STEPS)
 tree = np.mean([tree_predict(train, test, seed=s) for s in (0, 1, 2)], axis=0)
 final = apply_blend(phys, tree, blend["weight"], blend.get("cutoff", BLEND_CUTOFF))
 
-path = write_submission(final, "claude_ke_chatore")
+path = write_submission(final, "claude ke chhatore")
 n_mixed = int((phys <= BLEND_CUTOFF).sum())
 print(f"wrote {path.name}: {len(final)} rows, w={blend['weight']:.3f} physics below "
       f"{BLEND_CUTOFF:.0f}, pure physics above")

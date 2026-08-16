@@ -1,5 +1,5 @@
 # Recovering the Reactor
-### Team *Claude ke Chatore* — Phase 2 pitch
+### Team *Claude ke Chhatore* — Phase 2 pitch
 
 > **Source of truth.** Every number in this deck is declared in `scripts/audit_pitch.py`
 > and checked against `artifacts/` on every run. If a number here disagrees with the

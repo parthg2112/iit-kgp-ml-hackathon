@@ -1,1 +1,1 @@
-"""Reactor yield surrogate — IIT-KGP ML Hackathon (team: Claude ke Chatore)."""
+"""Reactor yield surrogate — IIT-KGP ML Hackathon (team: Claude ke Chhatore)."""

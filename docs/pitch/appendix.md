@@ -1,4 +1,4 @@
-# Technical Appendix — Team *Claude ke Chatore*
+# Technical Appendix — Team *Claude ke Chhatore*
 
 Verified by `python scripts/audit_pitch.py`, which reads every figure below live from
 `artifacts/` and fails if any has drifted.
@@ -296,7 +296,7 @@ a mechanism already physically justified.
 
 | | |
 |---|---|
-| File | `claude_ke_chatore.csv` |
+| File | `claude ke chhatore.csv` |
 | sha256 (first 16) | `c68e0e748e4928f2` |
 | Rows | 50, in `test_dataset.csv` order |
 | Column | one, header `overall_yield` |

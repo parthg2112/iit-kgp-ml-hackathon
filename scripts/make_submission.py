@@ -25,10 +25,12 @@ from src.evaluate import BLEND_CUTOFF, apply_blend
 from src.physics import NOISE_SIGMA_K, SUBMIT_STEPS, predict, predict_smoothed
 
 ARTIFACTS = ROOT / "artifacts"
-# Team name is "Claude ke Chatore". The file is written with underscores rather
-# than spaces -- the upload platform is happier without them, and the graders
-# match on team, not on exact punctuation.
-TEAM_NAME = "claude_ke_chatore"
+# The registered team name is "Claude ke Chhatore" -- note the double h, and note the
+# spaces. Problem statement section 5 requires the file be named [TeamName].csv, so the
+# filename mirrors the registration exactly. An earlier version of this file used
+# underscores on the theory that the upload platform preferred them; that was our own
+# guess, not a platform requirement, and the literal reading of the rule wins.
+TEAM_NAME = "claude ke chhatore"
 
 
 def main() -> int:

@@ -1,4 +1,4 @@
-# Reactor Yield Surrogate — Team *Claude ke Chatore*
+# Reactor Yield Surrogate — Team *Claude ke Chhatore*
 
 IIT-KGP ML Hackathon: predict `overall_yield` of product B from five reactor operating
 conditions. 150 training rows, 50 test rows, scored on RMSE. **One submission, no
@@ -11,15 +11,17 @@ ODE.
 
 ### What ships
 
-`claude_ke_chatore.csv`, built by `scripts/make_submission.py` from the policy triple
+`claude ke chhatore.csv`, built by `scripts/make_submission.py` from the policy triple
 **(σ, w, cutoff) = (1.67 K, 0.87, 60)** stored in `artifacts/blend.json`: physics predictions
 noise-averaged over σ = 1.67 K, blended 0.87/0.13 with the tree below a predicted yield of
 60, pure physics above.
 
 **Every number below carries its protocol — they are not comparable.**
 `train` = fit and scored on all 150 rows. `10f-CV` = repeated 10-fold, parameters refit per
-fold. `LOSO` = policy chosen on two seeds and scored on the third — the only figure that
-prices hyper-parameter selection, and the one to quote.
+fold. `LOSO` = policy chosen on two seeds and scored on the third — the headline figure,
+but **read it as a lower bound**: all three seeds re-partition the same 150 rows, so LOSO
+prices fold-partition noise, not hyper-parameter selection. A row-level split-half puts the
+selection cost at **+0.371**. See CLAUDE.md.
 
 | Model | Protocol | RMSE |
 |---|---|---|
@@ -38,7 +40,7 @@ out-of-fold predictions gives a 5th–95th percentile of **[2.41, 9.07]**.
 ## Where things are
 
 ```
-claude_ke_chatore.csv     <- THE SUBMISSION. 50 rows, one column. Do not hand-edit.
+claude ke chhatore.csv     <- THE SUBMISSION. 50 rows, one column. Do not hand-edit.
 notebook/final.ipynb      <- the finalist deliverable; self-contained, runs top to bottom
 README.md                 <- you are here
 CLAUDE.md                 <- engineering notes, gotchas, and every rejected hypothesis

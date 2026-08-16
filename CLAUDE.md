@@ -23,7 +23,7 @@ $PY scripts/run_baseline_cv.py     # repeated 10-fold CV, all tree variants (~3 
 $PY scripts/fit_physics.py         # single-model ODE fit; --maxiter/--popsize/--seed/--tag
 $PY scripts/compare_models.py      # fit every variant in physics.MODELS and rank them
 $PY scripts/run_physics_cv.py      # honest CV, params refit per fold + blend search (~10 min)
-$PY scripts/make_submission.py     # end-to-end -> "Claude ke Chatore.csv"
+$PY scripts/make_submission.py     # end-to-end -> "Claude ke Chhatore.csv"
 $PY scripts/build_notebook.py      # regenerate notebook/final.ipynb
 $PY scripts/make_figures.py        # figures/physics_diagnostics.png
 
@@ -77,9 +77,11 @@ cross-validation, never against a probe score.
 
 ### Submission contract (problem statement §5)
 
-- File named **`claude_ke_chatore.csv`** — team name is "Claude ke Chatore", but the file is
-  written with underscores (no spaces) for the upload platform. Do not "fix" this back to
-  the spaced form; it was a deliberate call.
+- File named **`claude ke chhatore.csv`** — the registered team name is **"Claude ke
+  Chhatore"** (double *h*), and §5 requires `[TeamName].csv`, so the filename mirrors the
+  registration exactly, spaces included. An earlier version used `claude_ke_chatore.csv`:
+  wrong on both counts — the underscores were our own guess at what the platform wanted
+  rather than a stated requirement, and the spelling was simply wrong.
 - Exactly 50 rows, in the **same order** as `test_dataset.csv`
 - Exactly **one** column, header `overall_yield` — no index column, no ID column
 - Floats to ≥3 decimals, all within `[0, 100]`
@@ -93,7 +95,7 @@ Do not hand-write the CSV.
 `README.md` is the teammate-facing orientation; this file is the engineering detail.
 
 ```
-claude_ke_chatore.csv   THE SUBMISSION — never hand-edit; rebuild via make_submission.py
+claude ke chhatore.csv   THE SUBMISSION — never hand-edit; rebuild via make_submission.py
 notebook/final.ipynb    finalist deliverable; SELF-CONTAINED, no src imports
 data/                   train_dataset.csv, test_dataset.csv  (paths in src/data.py)
 docs/                   problem_statement.pdf, guide.md (team brief — not ground truth)

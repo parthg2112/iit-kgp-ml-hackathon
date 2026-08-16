@@ -32,7 +32,7 @@ from src.physics import NOISE_SIGMA_K
 
 ART = ROOT / "artifacts"
 PITCH = ROOT / "docs" / "pitch"
-SUBMISSION = ROOT / "claude_ke_chatore.csv"
+SUBMISSION = ROOT / "claude ke chhatore.csv"
 SUBMISSION_SHA16 = "c68e0e748e4928f2"
 
 DECK, APPENDIX, QA = "deck.md", "appendix.md", "qa_bank.md"

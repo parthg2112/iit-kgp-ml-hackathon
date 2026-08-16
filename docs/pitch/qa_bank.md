@@ -1,4 +1,4 @@
-# Q&A Bank — Team *Claude ke Chatore*
+# Q&A Bank — Team *Claude ke Chhatore*
 
 One sentence and a number for each. Assume at least one reaction-engineering specialist on
 the panel. Every figure carries its protocol.

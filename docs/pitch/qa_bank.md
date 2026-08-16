@@ -75,6 +75,13 @@ We don't quote one — the headline **5.671** is leave-one-seed-out, where the p
 chosen on two seeds and scored on the third, and sigma was fixed a priori at the
 errors-in-variables median rather than tuned on that CV at all.
 
+**12b. Does leave-one-seed-out actually price that selection?**
+No, and we tested it rather than assuming — all three seeds re-partition the same 150 rows,
+so choosing (w, cutoff) on 75 rows and scoring on the other 75 costs **+0.371 RMSE** and
+loses 200/200 replicates, while LOSO prices the same choice at +0.02; **5.671 is a lower
+bound**, though the policy sits on a plateau (full-data argmax (0.86, 60) scores 5.6546 vs
+5.6547 shipped).
+
 **13. Your in-sample optimum scores better than 5.671. Why not quote that?**
 Because it is an argmax measured at its own optimum; the honest number is the one where the
 scoring seed took no part in selection.
@@ -91,8 +98,8 @@ refit landed at [234, 271].
 
 **16. One of your cold folds scored 13.05. Isn't that a failure?**
 It is genuine and reproducible at 3x the search budget — on those 135 rows a distinct
-parameter basin fits better (train 2.56) and generalizes worse, which is a property of the
-likelihood surface we then found again independently when bagging.
+parameter basin fits better (train 2.56) and generalizes worse, and which basin a fit lands
+in is set by **which rows are in the fold**: 10 of 100 folds sit there.
 
 **17. Why not average over parameter uncertainty?**
 We tested it: eight admissible starts spanning E2 = 210–265 refit inside a fold converge to
@@ -130,8 +137,9 @@ residual of 4.6e-13; we had earlier claimed the gain was "13 rows", which was wr
 per-band RMSE deltas are not additive.
 
 **22. If it's just variance reduction, why not bag the physics model instead?**
-We tried — bagging recovers only **+0.13** of the +0.28 and made one seed worse, because
-bootstrap replicates land in that second likelihood basin (train 2.56, held-out 13.05).
+We tried — bagging recovers only **+0.13** of the +0.28 and made one seed worse; we
+originally blamed the second likelihood basin, but only **7 of 2400** replicates ever cross
+into it, so the rejection stands and that explanation does not.
 
 **23. Would you drop the tree for a cleaner story?**
 It would cost 0.27 RMSE against a sampling band of [2.41, 9.07], so it is a defensible call
@@ -175,6 +183,12 @@ error tracks sensitivity.
 Because near the cliff a 2 K difference in operating temperature is a 20-point difference in
 yield — the neighbours are close in input space and far apart in outcome, which is exactly
 what an interior optimum with a steep flank produces.
+
+**30b. Does your model ever predict a meaningful yield on a completely dead reactor?**
+Yes — the blend lifts 15 of 111 dead-row predictions above 1.0 and **6 above 5.0, maximum
+11.499** (4.2% of total squared error), where pure physics contributes 0.0% there with a
+maximum of 0.102; we left it because the perfect repair is worth only **+0.119** and would
+be a fourth tuned rule.
 
 **31. You lifted a true-zero training row off zero. Isn't that a defect?**
 Row 97's truth is **0.282**, not 0.000, which marks it an *edge* row rather than an interior

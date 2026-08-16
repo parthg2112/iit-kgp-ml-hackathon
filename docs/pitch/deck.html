@@ -321,8 +321,19 @@
       <p class="lede">One submission. No leaderboard. Every decision made against
         cross-validation, never a probe score.</p>
       <p>We report <strong>leave-one-seed-out (LOSO)</strong>: the prediction policy is chosen on
-        two random seeds and scored on the third. It is the only protocol that prices
-        <em>hyper-parameter selection</em> rather than hiding it.</p>
+        two random seeds and scored on the third.</p>
+      <div class="callout"><span class="tag">And we will tell you its limitation first</span>
+        All three seeds re-partition the <em>same 150 rows</em>, so the "held-out" seed has
+        already seen every row. We measured what that costs: choosing the blend weight and cutoff
+        on 75 rows and scoring on the other 75 costs <strong>+0.371 RMSE</strong> against just
+        using our fixed values, and selection loses in <strong>200 of 200</strong> replicates.
+        LOSO prices the same choice at +0.02. So <strong>5.671 is a lower bound, not an unbiased
+        estimate</strong> — LOSO prices fold-partition noise, not selection.
+        <p style="margin:10px 0 0">What rescues the <em>policy</em>, as opposed to the number:
+        every search lands at a weight between 0.85 and 0.89 with the same cutoff of 60, and the
+        full-data optimum is (0.86, 60) scoring 5.6546 against 5.6547 for what we ship. We are on
+        a plateau, not a peak.</p>
+      </div>
 
       <div class="tablewrap">
         <table>
@@ -346,10 +357,13 @@
 
       <div class="notes"><span class="tag">Presenter notes</span>
         Put this second, before any result, so no number later needs defending on protocol
-        grounds. The bootstrap band pre-empts "you got lucky/unlucky" and signals we understand
-        our own error bars. If asked why not just quote 10-fold CV — because σ, w and cutoff were
-        all selected using CV, so quoting that same CV would report a gain measured at its own
-        optimum. LOSO holds a seed back from the selection itself.
+        grounds. The bootstrap band pre-empts "you got lucky/unlucky". <strong>Deliver the LOSO
+        limitation deliberately</strong> — we found it ourselves, late, by measuring the selection
+        cost at row level rather than seed level, and a careful judge would otherwise find it for
+        us. The distinction to hold onto: the <em>number</em> is optimistic, the <em>policy</em>
+        sits on a plateau and is not overfit. If pushed on what we would do differently — price
+        any new policy knob with row-level split-half or leave-one-row-out, because adding CV
+        seeds re-partitions the same 150 rows and can never price selection.
       </div>
     </div>
   </section>
@@ -376,6 +390,23 @@ dT/dz  =  a1*k1*CA + a2*k2*CB + U*(T_jacket - T)</pre>
           </tbody>
         </table>
       </div>
+
+      <h3>One measurement makes the point sharper than the table</h3>
+      <p>A quarter of the rows are dead reactors, so "is this reactor dead?" is a natural
+        classification task — the kind a discriminative model should own. Pooled out-of-fold AUC:</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Model</th><th class="num">AUC</th></tr></thead>
+          <tbody>
+            <tr class="ship"><td>Physics ODE prediction</td><td class="num">0.9587</td></tr>
+            <tr><td>ExtraTrees</td><td class="num">0.9505</td></tr>
+            <tr><td>Logistic regression</td><td class="num">0.9253</td></tr>
+            <tr><td>Gradient boosting</td><td class="num">0.9138</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Seven physical parameters beat every classifier we fitted, at the one task classifiers
+        are supposed to be good at — because the ODE knows <em>why</em> a reactor is dead.</p>
 
       <ul>
         <li><strong>Arrhenius reparameterized about 430 K.</strong> Fitting ln A and E directly
@@ -690,6 +721,16 @@ dT/dz  =  a1*k1*CA + a2*k2*CB + U*(T_jacket - T)</pre>
         band's improvement, with pre-blend errors of 21–38 yield-points against a band median
         |need| of 1.46.</p>
 
+      <div class="callout"><span class="tag">The specific cost you should hear from us</span>
+        The pure physics model contributes <strong>0.0%</strong> of its squared error on the 37
+        truly-dead rows — its largest prediction there is 0.102. The blend lifts <strong>15 of
+        111</strong> dead-row predictions above 1.0, <strong>6 above 5.0, maximum 11.499</strong>,
+        which is 4.2% of total squared error. So yes: on one dead reactor our shipped model
+        predicts about 11% yield. We left it because the perfect repair is worth only
+        <strong>+0.119</strong> and fixing it would be a fourth tuned rule — but it is a real cost
+        of buying variance with a tree.
+      </div>
+
       <div class="callout"><span class="tag">The cost, as a level not just a delta</span>
         On the 168 near-zero predictions the slice RMSE goes <strong>0.366 → 1.960</strong> — a
         delta of <strong>−1.594</strong>, costing 622.9 SSE. Blending also introduces
@@ -699,10 +740,12 @@ dT/dz  =  a1*k1*CA + a2*k2*CB + U*(T_jacket - T)</pre>
         recovered only +0.13 and destabilised one seed.
       </div>
 
-      <p><strong>Why bagging failed is itself a finding.</strong> Bootstrap replicates land in a
-        second optimum on the likelihood surface — one that fits 135 rows at RMSE 2.56 but scores
-        13.05 held out. Our cold-start cross-validation found the same basin independently. Any
-        resampling scheme on this dataset has to be checked for it.</p>
+      <p><strong>And we got the reason wrong the first time.</strong> We used to say bootstrap
+        replicates land in a second optimum on the likelihood surface. Measured: basin membership
+        is set by <em>which rows are in the fold</em>, not by the resample — 10 of 100 folds sit in
+        the second basin, but only <strong>7 of 2400 replicates</strong> ever cross between them
+        (0.3%). The rejection stands at +0.13 against a 0.3 bar; the mechanism we attached to it
+        did not survive being checked.</p>
 
       <div class="notes"><span class="tag">Presenter notes</span>
         Deliver deliberately; do not get discovered by it. Be careful with the claim structure —
@@ -734,6 +777,8 @@ dT/dz  =  a1*k1*CA + a2*k2*CB + U*(T_jacket - T)</pre>
             <tr><td>"ln k₃ goes to its bound, CV delta 0.0003"</td><td>Never measured. When measured: k₃ is seed-dependent, delta is −0.352</td><td>The fit rejects A→C on generalization</td></tr>
             <tr><td>First errors-in-variables run showed structure</td><td>A bug silently dropped all 41 well-fit rows</td><td>Fixed: 138/150 explained, structureless</td></tr>
             <tr><td>Notebook hardcoded σ = 2.5 after the policy moved to 1.67</td><td>Re-execution produced a different submission hash</td><td>Policy read from <code>blend.json</code>; both paths verified identical</td></tr>
+            <tr><td>"LOSO prices hyper-parameter selection"</td><td>Row-level split-half: selecting costs <strong>+0.371</strong>, losing 200/200. LOSO says +0.02</td><td>LOSO prices fold-partition noise; 5.671 is a lower bound</td></tr>
+            <tr><td>"Bagging failed because replicates land in a second basin"</td><td>Basin membership is set by the fold, not the resample — <strong>7 of 2400</strong> replicates cross</td><td>Rejection stands at +0.13; the mechanism was wrong</td></tr>
           </tbody>
         </table>
       </div>

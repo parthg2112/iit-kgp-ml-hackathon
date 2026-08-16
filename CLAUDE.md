@@ -179,7 +179,21 @@ Harmless, but state it rather than let a judge find it.
 **Quote the protocol with every number — they are not comparable.** `train` = fit and scored
 on all 150. `10f-CV` = repeated 10-fold, parameters refit per fold, warm-started. `cold` =
 folds refit by differential evolution from scratch. `LOSO` = policy hyper-parameters chosen
-on two seeds and scored on the third (the only figure that prices hyper-parameter selection).
+on two seeds and scored on the third.
+
+**LOSO does NOT price hyper-parameter selection — this doc used to claim it did, and that
+was wrong.** All three seeds re-partition the *same 150 rows* with the same `y`, so the
+"held-out" seed has already seen every row. Measured directly: choosing (w, cutoff) on 75
+rows and scoring on the other 75 costs **+0.371 RMSE** versus just using the fixed (0.87, 60),
+and selection loses in **200 of 200** replicates. Seed-level LOSO prices the same choice at
++0.000 / +0.029 / +0.022 — roughly **15× too small**. LOSO prices *fold-partition noise*,
+which is real but is not selection cost.
+
+**The number is optimistic; the policy is not wrong.** Every seed-level search lands at
+w ∈ [0.85, 0.89] with cutoff 60, and the full-data argmax is (0.86, 60) scoring 5.6546 against
+5.6547 for the shipped (0.87, 60). The weight sits on a plateau, so it is not a tuned artifact
+— but **5.671 should be read as a lower bound, not an unbiased estimate.** For any *new*
+policy knob, use row-level split-half or leave-one-row-out, not more seeds.
 
 | Quantity | Protocol | Value |
 |---|---|---|
@@ -194,6 +208,12 @@ on two seeds and scored on the third (the only figure that prices hyper-paramete
 
 A 50-row test set adds large sampling noise on top of any of these: bootstrapping the OOF
 predictions gives a 5th–95th percentile of **[2.41, 9.07]**.
+
+**`n_flow` floats during CV but is pinned in the shipped model.** `make_physics_predict_fn`
+passes the full 8-long `LOWER`/`UPPER` box, and n_flow settles at −0.02…−0.03 in every fold.
+So **6.358 / 5.935 / 5.671 are 8-free-parameter numbers describing a 7-parameter shipped
+model.** Immaterial in magnitude (the 95% interval is [−0.03, 0.02]) and it does not change
+any conclusion — but say "7 fitted, 8 free during CV" rather than let a judge find it.
 
 The warm-started CV and the cold folds agree at ~6.0, which is the honest generalization
 estimate. An earlier run reported 3.662 ± 0.000; that was a bug (see the guard note above),
@@ -239,6 +259,15 @@ wherever the ordering happens to put you. Leave-one-seed-out on the whole triple
 scores 5.640, but quoting that would be reporting a gain measured at its own optimum. Only
 the physics component is smoothed; the tree is fit on observed inputs and is already
 implicitly averaged over them, so blurring it too would double-count the noise.
+
+**Weaken the a-priori story — it is under-determined, though the value survives.** Using the
+EIV median|Δ| *directly* as σ is one reading of that statistic, not the only one: for a
+Gaussian, median|X| = 0.6745σ, so a moment-consistent reading of the **same** statistic gives
+σ = 2.476 — which is essentially the in-sample argmax this doc dismisses. The median is also
+heavily censored: **43 of 138** solved offsets are exactly 0.0. So "fixed a priori" is honest
+about *when* we chose it, not a claim that the data forces 1.67. What settles it is that
+σ = 2.476 is **worse** on blended LOSO (5.6849 vs 5.6706). Ship 1.67; do not oversell the
+derivation.
 
 **A single global weight hid a defect.** By prediction stratum the tree *helps* mid-range and
 *hurts* at both ends — worst on the near-zero rows the physics gets almost exactly right, and
@@ -333,14 +362,15 @@ and no upward pull. It recovers only **+0.132 of the +0.281**, and on one seed i
 than the single fit (6.62 vs 5.87). Bagging does keep predictions unbiased (+0.072), it just
 does not buy the variance reduction.
 
-**Report the failure as a robustness finding, not a dead end.** The reason it fails is the
-interesting part: bootstrap resamples hold ~63% unique rows, and some replicates converge
-into the **second seductive optimum** on the likelihood surface — the one the cold-fold
-analysis independently found at train 2.56 / held-out 13.05. Two unrelated procedures
-(10-fold cold refits, and 360 bootstrap fits) both fall into it. So the likelihood surface
-has a competitive-looking basin that fits ~135 rows better and generalises far worse, and
-any resampling scheme on this dataset must be checked for it. That is a statement about the
-problem, not about our code, and it belongs in the deck.
+**The rejection stands; the explanation we gave for it does NOT.** We used to say bootstrap
+replicates land in the second parameter basin and drag the average. Measured, that is false:
+basin membership is set by **which rows are in the fold**, not by the resample — 10 of 100
+folds sit in basin 2, only **7 of 2400 replicates** cross between basins (0.3%), and eight
+starts perturbed by ±3·SCALE all converge to the same fold optimum (parameter std 1.2e-4).
+So the second basin is a property of the *fold*, not of bootstrap resampling.
+
+Say the rejection, not the story: bagging recovers +0.132 of +0.281 and destabilises a seed.
+Do not attach the basin mechanism to it.
 
 ### Where the ODE itself is off — independent of the tree
 
@@ -470,6 +500,22 @@ Each was fitted and measured, not argued away:
 | Thermally neutral reactions | 8.27 vs 3.66 — clearly worse |
 | Parallel A→C path | **Now measured** (`scripts/pitch_evidence.py`). Fitted with `ln_k3_ref, E3_kJ, a3` free: train 3.6540 vs 3.6559 — 3 extra parameters buy **+0.0019**. 10f-CV over 3 seeds is **6.7103 vs 6.3579, i.e. −0.352 worse**, and unstable (5.41 / 8.13 / 6.59). Rejected on generalization |
 | Axial dispersion (tanks-in-series) | At *fixed* params worth only ~0.08 RMSE. Larger apparent gains came from refitting against the coarse cascade's discretization error — same failure mode as the step-drift bug |
+
+### Two things the 8-lever sweep turned up that belong in the pitch
+
+**ASSET — the 7-parameter ODE out-classifies every trained classifier at dead-vs-alive.**
+Pooled-OOF AUC: **physics 0.9587** > ExtraTrees 0.9505 > logistic regression 0.9253 >
+gradient boosting 0.9138. A mechanistic model with 7 physical parameters beats every
+discriminative model we could fit at the one task a classifier is supposed to be good at.
+That is a better line than any of the null results.
+
+**EXPOSURE — the blend lifts dead rows off zero, and it is not documented.** Pure smoothed
+physics contributes **0.0%** of its squared error on the 37 true-dead rows (max prediction
+0.102). The *blend* contributes **597.3 pooled squared-error units, 4.2% of the total**,
+lifting 15 of 111 dead-row predictions above 1.0, **6 above 5.0, max 11.499**. The perfect
+repair is worth only +0.1186, so leaving it is correct — but *"why does your model predict
+11% yield on a dead reactor?"* must not be first heard from a judge. This is the same
+mechanism as the documented row 97, one order of magnitude larger.
 
 ### The second ensemble member is already near its ceiling — do not re-litigate
 

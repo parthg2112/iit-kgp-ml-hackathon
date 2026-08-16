@@ -84,6 +84,20 @@ artifact of pinning during profiling; there is no posterior to average over.
 | `cold` | folds refit by differential evolution from scratch, no warm start |
 | `LOSO` | prediction policy chosen on two seeds, scored on the third |
 | `bootstrap` | resampled 50-row draws from out-of-fold predictions |
+| `split-half` | policy chosen on 75 rows, scored on the other 75 — the only protocol here that genuinely prices selection |
+
+**LOSO does not price hyper-parameter selection, and this appendix used to claim it did.**
+All three seeds re-partition the same 150 rows, so the held-out seed has already seen every
+row. Measured: choosing (w, cutoff) on 75 rows and scoring on the other 75 costs **+0.371
+RMSE** against the fixed (0.87, 60), and selection loses **200 of 200** replicates; LOSO
+prices the same choice at +0.000 / +0.029 / +0.022. **Read 5.671 as a lower bound.** The
+policy itself is sound — every search lands at w ∈ [0.85, 0.89] with cutoff 60, and the
+full-data argmax (0.86, 60) scores 5.6546 against 5.6547 for the shipped value.
+
+**`n_flow` floats during CV but is pinned in the shipped model.** `make_physics_predict_fn`
+passes the full 8-parameter box and n_flow settles at −0.02…−0.03 in every fold, so the CV
+and LOSO figures describe 8 free parameters for a 7-parameter shipped model. Immaterial
+(95% interval [−0.03, 0.02]) but stated rather than hidden.
 
 | Quantity | Protocol | Value |
 |---|---|---|

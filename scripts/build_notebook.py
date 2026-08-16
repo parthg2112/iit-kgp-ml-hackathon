@@ -327,9 +327,16 @@ exercise from a genuinely cold start in section 4b — those are the numbers we 
 **Naming the protocols once, because they are not comparable.** `train` = fit and scored on
 all 150 rows. `10f-CV` = repeated 10-fold, parameters refit per fold. `cold` = folds refit
 by differential evolution from scratch. `LOSO` = the prediction policy chosen on two seeds
-and scored on the third — the only figure that prices hyper-parameter selection, and the
-number we quote for the shipped model: **LOSO 5.671**, against 6.022 for the policy it
-replaced, better on all three held-out seeds.
+and scored on the third: **LOSO 5.671**, against 6.022 for the policy it replaced, better on
+all three held-out seeds.
+
+**LOSO does not price hyper-parameter selection, and we used to claim it did.** All three
+seeds re-partition the *same 150 rows*, so the held-out seed has already seen every row.
+Choosing the blend weight and cutoff on 75 rows and scoring on the other 75 costs **+0.371
+RMSE** against just using the fixed values, and selection loses 200 of 200 replicates; LOSO
+prices the same choice at +0.02. So read **5.671 as a lower bound**. The policy itself is
+sound — every search lands at w between 0.85 and 0.89 with cutoff 60, and the full-data
+argmax (0.86, 60) scores 5.6546 against 5.6547 for what ships.
 
 ### 4a. The baseline we had to beat
 """),
@@ -444,12 +451,12 @@ those rows (5.935 → 5.654 whole-set, per seed), but we state it rather than le
 We also tested whether the variance reduction could come from a defensible single-model
 source instead — **bagging the physics fit** over bootstrap resamples. It recovers only +0.13
 of the +0.28 and on one seed is worse than the single fit. The reason is worth more than the
-result: bootstrap resamples hold only ~63% unique rows, and some of them converge into the
-alternative parameter basin documented in section 4b — the one that fits a subset at RMSE
-2.56 while scoring 13.05 held out. Two unrelated procedures, cold-start cross-validation and
-360 bootstrap fits, independently fall into the same trap. That is a property of this
-likelihood surface, and any resampling scheme applied to this dataset has to be checked for
-it. So the second model stays, on measured grounds rather than preference.
+result — and we got it wrong the first time. We originally blamed the alternative parameter
+basin from section 4b (the one that fits a subset at RMSE 2.56 while scoring 13.05 held out).
+Measured properly, basin membership is set by **which rows are in the fold**, not by the
+resample: 10 of 100 folds sit in the second basin, but only **7 of 2400 replicates** ever
+cross into it. The rejection stands; the mechanism we attached to it did not survive being
+checked. So the second model stays, on measured grounds rather than preference.
 
 The weight sits on a broad plateau (gain 0.281 / 0.279 / 0.271 at w = 0.87 / 0.85 / 0.89),
 not a sharp peak — so it is not a tuning artifact.

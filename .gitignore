@@ -5,3 +5,6 @@ __pycache__/
 artifacts/smoke*
 artifacts/*.log
 scratch/
+
+# Generated PDFs (rebuild with scripts/md2pdf.sh)
+docs/pitch/*.pdf

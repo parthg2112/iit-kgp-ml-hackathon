@@ -1,0 +1,58 @@
+{
+  "leaderboard": {
+    "rank": 13,
+    "of": 400,
+    "rmse": 11.0442,
+    "mae": 3.2408,
+    "r2": 0.9061,
+    "n": 50
+  },
+  "derived": {
+    "sse": 6098.717682,
+    "sae": 162.04000000000002,
+    "rmse_over_mae": 3.4078622562330287,
+    "implied_target_sd": 36.0413845726955,
+    "gaussian_ratio": 1.2533,
+    "laplace_ratio": 1.4142
+  },
+  "two_group": {
+    "1": {
+      "n_big": 1,
+      "error_big": 77.14686795791533,
+      "error_rest": 1.732512898818055,
+      "n_rest": 49
+    },
+    "2": {
+      "n_big": 2,
+      "error_big": 54.96427296924289,
+      "error_rest": 1.0856552929482133,
+      "n_rest": 48
+    },
+    "3": {
+      "n_big": 3,
+      "error_big": 45.03060634476946,
+      "error_rest": 0.5733655524615243,
+      "n_rest": 47
+    },
+    "4": {
+      "n_big": 4,
+      "error_big": 39.04475290327592,
+      "error_rest": 0.1274127910194859,
+      "n_rest": 46
+    }
+  },
+  "our_oof_bootstrap": {
+    "n_draws": 20000,
+    "rmse_p5": 2.9421473493081503,
+    "rmse_p95": 8.103210115819598,
+    "rmse_median": 5.428043009155278,
+    "mae_p5": 1.7423225069789863,
+    "mae_p95": 4.028720397146332,
+    "mae_median": 2.7251347880934134,
+    "ratio_p5": 1.5477767259235884,
+    "ratio_p95": 2.3665053069205744,
+    "p_rmse_at_least_observed": 0.0003,
+    "p_mae_at_most_observed": 0.7593,
+    "oof_rows_over_40": 0
+  }
+}

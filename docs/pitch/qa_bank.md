@@ -232,6 +232,41 @@ rejecting it on chemical grounds — which is a kind of review no validation cur
 
 ---
 
+## The leaderboard score (offline round)
+
+**A1. Your RMSE is 11.04 but your cross-validation said 5.7. Which is right?**
+Both — RMSE on 50 rows is dominated by its tail, and our MAE of **3.24** landed exactly inside
+the [1.74, 4.03] we predicted, so typical-row accuracy was as expected; the RMSE gap is two or
+three cliff rows.
+
+**A2. How do you know it is a few rows and not general inaccuracy?**
+The ratio RMSE/MAE = **3.41**, where Gaussian errors give 1.25 and Laplace 1.41; solving for an
+error distribution matching RMSE, MAE and R² on 50 rows gives ~47 rows accurate to about **1
+yield-point** and 2–3 rows missed by **45–55**.
+
+**A3. Did you predict this?**
+We predicted the *mechanism* and its location — cliff rows carrying nearly all squared error —
+but we **underestimated the magnitude**: our own bootstrap put RMSE in [2.94, 8.10], and our
+150 training rows never produced a miss above 40 points while the test set produced two or
+three.
+
+**A4. Does that mean your validation was wrong?**
+It was right on the median and on MAE and wrong on the tail, which is the honest limit of
+estimating a tail from 150 rows — the cliff is sharper in the test set than anything we
+observed in training.
+
+**A5. Is the test set different from your training data?**
+No — a two-sample classifier cannot distinguish them (**AUC 0.500**), and R² 0.9061 implies a
+test-target spread of **36.0** against 38.3 in training; the difference is which *specific*
+rows landed near the cliff.
+
+**A6. How would you tell whether a future failure is chemical, sensor, or model?**
+Refit the seven parameters on the new data and read which one moved — **U** alone means
+fouling, **k₁** alone means catalyst degradation, all stable with rising error means sensor
+drift — a diagnosis a black-box model cannot offer.
+
+---
+
 ## Process and integrity
 
 **39. What did you get wrong?**

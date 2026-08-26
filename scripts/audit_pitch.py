@@ -36,6 +36,9 @@ SUBMISSION = ROOT / "claude ke chhatore.csv"
 SUBMISSION_SHA16 = "c68e0e748e4928f2"
 
 DECK, APPENDIX, QA = "deck.md", "appendix.md", "qa_bank.md"
+# SLIDES is the deck actually presented at the offline round (5-slide cap). DECK is the
+# 12-slide version, retained as Q&A depth and explicitly NOT presented.
+SLIDES = "slides.md"
 
 
 def load(name):
@@ -185,6 +188,28 @@ def build_facts():
     add("train_rows_above_crossover", op["train_rows_above"], "{:.0f}", "observed",
         "operating_rule.json", [DECK])
 
+    # --- the offline-round leaderboard result, and its decomposition -----------
+    sd = load("score_decomposition.json")
+    lb = sd["leaderboard"]
+    add("lb_rmse", lb["rmse"], "{:.4f}", "official leaderboard, 50 test rows",
+        "score_decomposition.json", [SLIDES])
+    add("lb_mae", lb["mae"], "{:.4f}", "official leaderboard, 50 test rows",
+        "score_decomposition.json", [SLIDES])
+    add("lb_r2", lb["r2"], "{:.4f}", "official leaderboard, 50 test rows",
+        "score_decomposition.json", [SLIDES])
+    add("lb_ratio", sd["derived"]["rmse_over_mae"], "{:.2f}", "derived from the leaderboard",
+        "score_decomposition.json", [SLIDES])
+    add("decomp_2_big", sd["two_group"]["2"]["error_big"], "{:.1f}",
+        "two-group reconstruction", "score_decomposition.json", [SLIDES])
+    add("decomp_2_rest", sd["two_group"]["2"]["error_rest"], "{:.2f}",
+        "two-group reconstruction", "score_decomposition.json", [SLIDES])
+    add("decomp_3_big", sd["two_group"]["3"]["error_big"], "{:.1f}",
+        "two-group reconstruction", "score_decomposition.json", [SLIDES])
+    add("decomp_3_rest", sd["two_group"]["3"]["error_rest"], "{:.2f}",
+        "two-group reconstruction", "score_decomposition.json", [SLIDES])
+    add("implied_test_sd", sd["derived"]["implied_target_sd"], "{:.1f}",
+        "derived from R^2", "score_decomposition.json", [SLIDES])
+
     # --- speed ----------------------------------------------------------------
     add("bdf_speedup", ev["timing"]["speedup_vs_bdf_at_512"], "{:.0f}", "measured",
         "pitch_evidence.json", [DECK, APPENDIX])
@@ -198,7 +223,7 @@ def build_facts():
 
 def check_docs(facts, problems, notes):
     texts = {}
-    for name in (DECK, APPENDIX, QA):
+    for name in (DECK, APPENDIX, QA, SLIDES):
         p = PITCH / name
         if not p.exists():
             problems.append(f"MISSING DOCUMENT: docs/pitch/{name}")

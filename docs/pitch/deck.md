@@ -1,6 +1,11 @@
 # Recovering the Reactor
 ### Team *Claude ke Chhatore* — Phase 2 pitch
 
+> **NOT THE PRESENTED DECK.** The offline round caps the presentation at **5 slides**, and
+> additional slides "may not be considered during the judging process." The presented deck is
+> `slides.md` / `slides.html`. This 12-slide version is retained as **depth for the Q&A round**,
+> where judges may probe any decision.
+>
 > **Source of truth.** Every number in this deck is declared in `scripts/audit_pitch.py`
 > and checked against `artifacts/` on every run. If a number here disagrees with the
 > repository, the audit fails. Run `python scripts/audit_pitch.py` to verify.

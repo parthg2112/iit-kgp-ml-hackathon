@@ -10,6 +10,28 @@
 > and checked against `artifacts/` on every run. If a number here disagrees with the
 > repository, the audit fails. Run `python scripts/audit_pitch.py` to verify.
 
+## Q&A Navigator
+
+Find the slide before you finish reading the question.
+
+| If the judge asks about… | Go to | Headline |
+|---|---|---|
+| Why temperature drives yield more than concentration | 1, 5 | E2/E1 = 5.79, crossover at 449.9 K |
+| Whether the CV number can be trusted | 2 | LOSO 5.671 — a lower bound, not an estimate |
+| Why a physics model instead of a learned one | 3 | 7 parameters beat every classifier tried, AUC 0.9587 |
+| Why residence time doesn't correlate with yield | 4 | interior optimum — both tails are low, so corr cancels |
+| Why concentration barely matters | 5 | two heat effects, opposite sign, near-exact cancellation |
+| What else was tried and rejected | 6 | 8 hypotheses, each fitted and measured |
+| Whether the fit is one optimizer's fluke | 7 | a blind refit agrees to 5 significant figures |
+| Where the model is weakest | 8, 9 | 29% of rows carry 91% of the error |
+| Why there's a random forest in a physics pitch | 10 | 13% weight — cost and gain both disclosed |
+| What we got wrong along the way | 11 | 8 falsified claims, corrected in the open |
+| What deployment needs | 12 | 225x faster than BDF; the operating rule is joint in (T, tau) |
+
+Every number here is restated once, at its source slide, with its protocol. This index
+never repeats the caveats — see Slide 2 for the LOSO/sampling-band disclosure, Slide 10
+for the tree's cost, both stated exactly once.
+
 ---
 
 ## Slide 1 — The trade-off that decides everything
@@ -29,15 +51,15 @@ heat accelerates both — but not equally:
 | Desired, A → B | **E1 = 43.16 kJ/mol** |
 | Waste, B → C | **E2 = 250.07 kJ/mol** |
 
-### **E2 / E1 = 5.79**
+### E2 / E1 = 5.79
 
 Heating accelerates the destruction of B almost six times as steeply as its formation. The
-two rate constants cross at **449.9 K**. Below it, the reactor makes B faster than it
-destroys it. Above it, the reverse — and yield collapses.
+two rate constants cross at **449.9 K**: below it the reactor makes B faster than it destroys
+it, above it the reverse, and yield collapses.
 
-**That single ratio explains the whole dataset.** It is why the correlation between jacket
-temperature and yield is *negative* (−0.498). It is why a quarter of the training rows are
-exactly zero. It is the reason there is an optimum at all.
+**That single ratio explains the whole dataset** — the negative correlation between jacket
+temperature and yield (−0.498), the quarter of training rows sitting at exactly zero, and why
+an optimum exists at all.
 
 > **Presenter notes.** Open here, not on the modelling. The rubric scores process insight,
 > so lead with the physical statement and let the ML follow from it. The crossover is
@@ -59,9 +81,9 @@ and scored on the third.
 **And we will tell you its limitation before you ask.** All three seeds re-partition the
 *same 150 rows*, so the "held-out" seed has already seen every row. We measured what that
 costs: choosing the blend weight and cutoff on 75 rows and scoring on the other 75 costs
-**+0.371 RMSE** against just using our fixed values, and selection loses in **200 of 200**
-replicates. LOSO prices the same choice at +0.02. So **5.671 is a lower bound, not an
-unbiased estimate** — LOSO prices fold-partition noise, not selection.
++0.371 RMSE against just using our fixed values, and selection loses in 200 of 200
+replicates. LOSO prices the same choice at +0.02 — roughly 15x too small. **So 5.671 is a
+lower bound, not an unbiased estimate: LOSO prices fold-partition noise, not selection.**
 
 What rescues the *policy*, as opposed to the number: every search lands at a weight between
 0.85 and 0.89 with the same cutoff of 60, and the full-data optimum is (0.86, 60) scoring
@@ -74,12 +96,13 @@ What rescues the *policy*, as opposed to the number: every search lands at a wei
 | Previous policy | LOSO | **6.022** |
 | **SHIPPED — sigma 1.67 K, w 0.87, cutoff 60** | **LOSO** | **5.671** |
 
-Every other figure in this deck carries its protocol inline. They are **not** comparable to
-each other.
+Every other figure in this deck carries its protocol inline; none of them are comparable to
+each other without it.
 
-**And the honest caveat:** a 50-row test set is small. Bootstrapping our out-of-fold
-predictions gives a 5th–95th percentile of **[2.41, 9.07]**. A large part of our final
-score is luck, and we would rather say so than pretend a point estimate is a promise.
+**The sampling caveat, stated once:** a 50-row test set is small. Bootstrapping our
+out-of-fold predictions gives a 5th–95th percentile of **[2.41, 9.07]**. Much of our final
+score is luck, and we would rather say so than let a point estimate read as a promise. This
+band is the answer to "how much of your score is noise" everywhere it comes up later.
 
 > **Presenter notes.** Put this second, before any result, so no number later needs
 > defending on protocol grounds. The bootstrap band pre-empts "you got lucky / unlucky".
@@ -143,21 +166,20 @@ Two implementation choices earned their place:
 
 ---
 
-## Slide 4 — The operating map
+## Slide 4 — Residence time is critical, and its correlation with yield is (correctly) zero
 
 **Yield is a ridge, not a slope.** Too cold or too fast, A never converts. Too hot or too
-slow, B is destroyed. The optimum is a narrow band between them.
-
-This produces a result that looks like a null and is not:
+slow, B is destroyed. The optimum sits on a narrow band between them — which produces a
+result that looks like a null and is not:
 
 ### corr(log tau, yield) = +0.061
 
-**Residence time is the single most important derived quantity in the problem** — and its
-linear correlation with yield is essentially zero. That is the signature of an **interior
+Residence time is the single most important derived quantity in the problem, and its linear
+correlation with yield is essentially zero. That is the signature of an **interior
 optimum**: both tails are low-yield, so the correlation cancels.
 
-A model selecting features by correlation would discard residence time entirely. This is
-the clearest example of why we did not let a feature-importance ranking drive the model.
+A model selecting features by correlation would discard residence time entirely — the
+clearest example of why a feature-importance ranking never drove this model.
 
 > **Presenter notes.** This slide exists to demonstrate reading a diagnostic correctly. It
 > is also a trap we watched others fall into: the same logic applies to concentration,
@@ -174,13 +196,12 @@ the clearest example of why we did not let a feature-importance ranking drive th
 
 Concentration is a knob the operator controls, and it does essentially nothing. Why?
 
-**The tempting answer:** "both reactions are first-order, so CA0 cancels." True for the
+**Tempting answer 1:** "both reactions are first-order, so CA0 cancels." True for the
 isothermal yield expression — but incomplete. A richer feed releases more reaction heat,
 which should change yield through the thermal path.
 
-**The next tempting answer:** "so the reactions must be thermally neutral." **We tested
-this and it is false.** Forcing a1 = a2 = 0 costs train RMSE **8.27** against 3.66. The heat
-terms are real and large.
+**Tempting answer 2:** "so the reactions must be thermally neutral." We tested this: forcing
+a1 = a2 = 0 costs train RMSE 8.27 against 3.66. **False.** The heat terms are real and large.
 
 **What actually happens:**
 
@@ -197,15 +218,15 @@ That is the defensible answer, and we only have it because we fitted the mechani
 > **Presenter notes.** This is the strongest process-insight slide; do not rush it. The
 > structure — obvious answer, better answer, both wrong, measured answer — is the whole
 > pitch in miniature. Note that first-order kinetics is itself something we measured rather
-> than assumed: see slide 6. If asked whether the cancellation is a coincidence, say we do
+> than assumed: see Slide 6. If asked whether the cancellation is a coincidence, say we do
 > not know; it is what the data supports, and a1 is determined tightly enough (95% CI
 > [-12.12, -11.49]) that the cancellation is not an artifact of a loose fit.
 
 ---
 
-## Slide 6 — What we tried to break
+## Slide 6 — Eight hypotheses, fitted and measured, all rejected
 
-Every entry below was **fitted and measured**, not argued away. Costs carry their protocol.
+Nothing below was argued away. Each row carries its own protocol.
 
 | Hypothesis | Result | Protocol |
 |---|---|---|
@@ -219,16 +240,15 @@ Every entry below was **fitted and measured**, not argued away. Costs carry thei
 | E2 = 155 kJ/mol (an external audit's value) | **+2.62** | train |
 
 **The parallel path deserves a sentence.** The problem statement calls this a
-*"series-parallel reaction network"* while listing only A → B → C. So we fitted the parallel
-path rather than assume either reading. Three extra parameters buy **0.002** on training
-error and **lose 0.35** on cross-validation, swinging 5.41 / 8.13 / 6.59 across seeds. That
-is what fitting noise looks like. **The data supports the series network.**
+*"series-parallel reaction network"* while listing only A → B → C, so we fitted the parallel
+path rather than assume either reading. Three extra parameters buy 0.002 on training error
+and lose 0.35 on cross-validation, swinging 5.41 / 8.13 / 6.59 across seeds — what fitting
+noise looks like. The data supports the series network.
 
 **The flow result is a positive finding, not just a rejection.** Turbulent heat transfer
-would give n ≈ 0.8. We measure n ≈ 0, with a 95% interval excluding even 0.03. So the
-controlling thermal resistance is **not on the process side** — flow enters this reactor
-only through residence time. That is actionable: increasing flow will not improve jacket
-duty.
+would give n ≈ 0.8; we measure n ≈ 0, with a 95% interval excluding even 0.03. The
+controlling thermal resistance is not on the process side — flow enters this reactor only
+through residence time, so increasing flow will not improve jacket duty.
 
 > **Presenter notes.** This is the Robustness criterion. Lead with the A→C row, because the
 > problem statement's own wording invites the question and most teams will not have tested
@@ -239,10 +259,10 @@ duty.
 
 ---
 
-## Slide 7 — Independent replication
+## Slide 7 — A blind refit, on a different numerical stack, agrees to five significant figures
 
 We ran a **blind refit**: a separate agent, given only the data and the problem statement,
-with **no access to our code, parameters, or notes**. It used a different integrator (SciPy
+with no access to our code, parameters, or notes. It used a different integrator (SciPy
 LSODA) and a different optimizer.
 
 | Parameter | Ours | Blind refit |
@@ -254,12 +274,12 @@ LSODA) and a different optimizer.
 | U | 3.2552 | 3.2554 |
 | train RMSE | 3.6559 | 3.6554 |
 
-**Agreement to roughly five significant figures**, from a different numerical stack.
-
 It independently reproduced the falsification too: forcing a1 = a2 = 0 gives **8.2679**
-against our **8.2683** — four decimal places.
+against our **8.2683** — agreement to four decimal places on a result we had already
+rejected once.
 
-And the E2 confidence interval: ours **[233.75, 269.92]**, the blind refit's **[234, 271]**.
+The E2 confidence interval matches just as tightly: ours **[233.75, 269.92]**, the blind
+refit's **[234, 271]**.
 
 > **Presenter notes.** This is the answer to "how do we know your optimizer did not just
 > find a convenient local minimum". Two independent implementations landing on the same
@@ -283,10 +303,11 @@ yields among each row's six nearest neighbours in (log tau, T_in, T_jacket):
 
 ### 29% of rows carry 91% of the error.
 
-**And we can say why.** It is not that those rows are intrinsically hard — it is that
-**dY/dT is large there**. Grouping instead by sensitivity, the least-sensitive fifth of rows
-sits at RMSE **0.200** and the most-sensitive fifth at **7.393**. The error tracks
-sensitivity, which is exactly what a small input perturbation would produce.
+**And we can say why: dY/dT is large there, not that those rows are intrinsically hard.**
+Grouping by sensitivity instead of neighbour spread, the least-sensitive fifth of rows sits
+at RMSE **0.200** and the most-sensitive fifth at **7.393** — error tracks sensitivity, which
+is exactly what a small input perturbation would produce. (Slide 9 builds on this figure to
+rule out output noise.)
 
 **The consequence for effort allocation:** further modelling of the well-determined majority
 cannot move the score. The result is decided by how the cliff-edge rows fall.
@@ -299,42 +320,42 @@ cannot move the score. The result is decided by how the cliff-edge rows fall.
 
 ---
 
-## Slide 9 — The information limit, stated at the strength the evidence supports
+## Slide 9 — Noise evidence: what it supports, and where it stops
 
 We believe we are near the limit of what these 150 rows determine. Here is the evidence,
 and here is where it stops.
 
 **What we measured:**
 
-- **Residual scales with input sensitivity** — least-sensitive quintile **0.200**,
-  most-sensitive **7.393**. This rules out *output* noise, which would be uniform.
+- **Residual scales with input sensitivity** — see Slide 8's quintile split. This rules out
+  *output* noise, which would be uniform, not sensitivity-tracking.
 - **No residual structure.** A scan over 104 features and pairwise products finds nothing
   (largest |r| = 0.137, expected false positives ≈ 0.2).
 - **A median temperature offset of 1.67 K reproduces 138 of 150 rows** exactly, and those
   offsets are structureless (largest feature correlation 0.206).
 - **Smoothing over that offset degrades training error while improving CV** — train
-  3.6559 → 3.7643, 10f-CV 6.3579 → 5.9279, better on all three seeds. **A blur applied to a
-  correct model with clean inputs would hurt CV, not help it.** This is the strongest
-  single result we have.
+  3.6559 → 3.7643, 10f-CV 6.3579 → 5.9279, better on all three seeds. A blur applied to a
+  correct model with clean inputs would hurt CV, not help it — the strongest single result
+  we have.
 
 **What we will not claim:**
 
-- **There is one locality where our ODE is measurably off.** In the 0.5–10% predicted-yield
-  band the physics **misses low** — band RMSE 11.21 against 5.94 overall. State the shape
-  carefully: the mean shortfall is **+3.99** but the median only **+0.70**, so it is not a
-  uniform four-point offset but a handful of badly-missed cliff rows, with |need| reaching
-  **38 yield-points**. This holds whether or not the tree is in the model, and it is the same
-  29%-of-rows/91%-of-error concentration seen on the previous slide.
+- **One locality where our ODE is measurably off:** in the 0.5–10% predicted-yield band the
+  physics misses low — band RMSE 11.21 against 5.94 overall. Stated carefully, the mean
+  shortfall is +3.99 but the median only +0.70, so this is a handful of badly-missed cliff
+  rows (|need| reaching 38 yield-points), not a uniform four-point offset. It holds whether
+  or not the tree is in the model — the same 29%-of-rows/91%-of-error concentration as
+  Slide 8.
 - **12 of 150 rows cannot be reproduced by any offset within ±25 K.** Something else is
   going on in those rows and we have not identified it.
-- We do **not** claim the residual is fully accounted for. Against 10f-CV 6.36, the
-  non-noise component is roughly 4.7 — parameter-estimation variance plus those 12 rows.
-- We do **not** cite residual unbiasedness as evidence. Least squares forces the residual
+- We do not claim the residual is fully accounted for: against 10f-CV 6.36, the non-noise
+  component is roughly 4.7 — parameter-estimation variance plus those 12 rows.
+- We do not cite residual unbiasedness as evidence. Least squares forces the residual
   orthogonal to df/dtheta, so a small mean residual is a first-order condition of the
-  optimizer, not a fact about noise. We used to present it as a pillar. It is not one.
-- **A caveat against our own conclusion:** a small error in E2 would produce the same
-  dY/dT signature as input noise. The sensitivity result is *consistent with* the noise
-  story, not diagnostic of it.
+  optimizer, not a fact about noise — we used to present it as a pillar; it is not one.
+- **A caveat against our own conclusion:** a small error in E2 would produce the same dY/dT
+  signature as input noise. The sensitivity result is *consistent with* the noise story, not
+  diagnostic of it.
 
 > **Presenter notes.** Deliver the second half as deliberately as the first. Volunteering
 > the 12 unexplained rows and the E2-mimicry caveat is more persuasive than a clean story,
@@ -351,9 +372,8 @@ you find it.**
 
 **We could not demonstrate bias correction at our pre-registered bar** — sign test 8 of 13
 (62%, p = 0.581) against a bar of ≥ 11/13. The mean correction *is* directionally aligned
-(**+3.29** supplied against **+4.34** needed, same sign, ~76% of what is required), but at
-n = 13 we cannot separate that from variance reduction. **So we claim the weaker
-interpretation.**
+(+3.29 supplied against +4.34 needed, same sign, ~76% of what is required), but at n = 13 we
+cannot separate that from variance reduction. So we claim the weaker interpretation.
 
 | Test | Result |
 |---|---|
@@ -378,30 +398,29 @@ RMSE is not additive; squared error is. Pooled over 3 seeds × 150 rows:
 | **TOTAL** | **450** | **5.935 → 5.655** | **+1464.3** | **100%** |
 
 **This corrects an earlier claim of ours** that the whole gain came from 13 rows. It does
-not — the mid band contributes 52% of it. And the gain is **tail-dominated**: the top 3 of
-the 39 low-band rows supply 77% of that band's improvement, with pre-blend errors of 21–38
+not — the mid band contributes 52% of it, and the gain is tail-dominated: the top 3 of the
+39 low-band rows supply 77% of that band's improvement, with pre-blend errors of 21–38
 yield-points against a band median |need| of just 1.46.
 
-**The cost, stated as a level not just a delta:** on the 168 near-zero predictions the slice
-RMSE goes **0.366 → 1.960**, a delta of **-1.594** and a cost of 622.9 SSE. Blending also
-introduces **+1.083** of upward bias on the blended rows.
+**The cost, stated as a level, not just a delta:** on the 168 near-zero predictions the slice
+RMSE goes 0.366 → 1.960 (a delta of -1.594, a cost of 622.9 SSE). Blending also introduces
++1.083 of upward bias on the blended rows.
 
-**And the specific version of that cost you should hear from us, not find yourselves.** The
-pure physics model contributes **0.0%** of its squared error on the 37 truly-dead rows — its
-largest prediction there is 0.102. The blend lifts **15 of 111** dead-row predictions above
-1.0, **6 above 5.0, with a maximum of 11.499**, which is 4.2% of total squared error. So yes:
-on one dead reactor our shipped model predicts about 11% yield. We left it because the perfect
-repair is worth only **+0.119** and fixing it would be a fourth tuned rule — but it is a real
-cost of buying variance with a tree. We keep it because the net is
-**+0.27** across all three held-out seeds, the weight sits on a plateau rather than a peak,
-and we tested the principled alternative — **bagging the physics fit** — which recovered only
-+0.13 and destabilised one seed.
+**The specific version of that cost, disclosed rather than left for a judge to find:** pure
+physics contributes 0.0% of its squared error on the 37 truly-dead rows — its largest
+prediction there is 0.102. The blend lifts 15 of 111 dead-row predictions above 1.0, 6 above
+5.0, with a maximum of 11.499 — 4.2% of total squared error. So yes: on one dead reactor our
+shipped model predicts about 11% yield. We left it because the perfect repair is worth only
++0.119 and fixing it would be a fourth tuned rule, but it is a real cost of buying variance
+with a tree. We keep the trade because the net is **+0.27** across all three held-out seeds,
+the weight sits on a plateau rather than a peak, and we tested the principled alternative —
+bagging the physics fit — which recovered only +0.13 and destabilised one seed.
 
 **And we got the reason wrong the first time.** We used to say bootstrap replicates land in a
-second optimum on the likelihood surface. Measured: basin membership is set by *which rows are
-in the fold*, not by the resample — 10 of 100 folds sit in the second basin, but only **7 of
-2400 replicates** ever cross between them (0.3%). The rejection stands at +0.13 against a 0.3
-bar; the mechanism we attached to it did not survive being checked.
+second optimum on the likelihood surface. Measured: basin membership is set by *which rows
+are in the fold*, not by the resample — 10 of 100 folds sit in the second basin, but only
+7 of 2400 replicates ever cross between them (0.3%). The rejection stands at +0.13 against a
+0.3 bar; the mechanism we attached to it did not survive being checked.
 
 > **Presenter notes.** Deliver deliberately; do not get discovered by it. Be careful with the
 > claim structure here — we say we *could not demonstrate* bias correction, not that it is
@@ -417,7 +436,7 @@ bar; the mechanism we attached to it did not survive being checked.
 
 ## Slide 11 — What we got wrong
 
-**Six claims we made, and what falsified them.** No other team will bring this slide.
+**Eight claims we made, and what falsified them.** No other team will bring this slide.
 
 | We claimed | What falsified it | What we say now |
 |---|---|---|
@@ -450,10 +469,10 @@ is worth disclosing rather than presenting the corrected result as if it arrived
 
 ## Slide 12 — Result, and what it would take to deploy
 
-### Shipped: LOSO **5.671**, against **16.37** for the best tree ensemble
+### Shipped: LOSO 5.671, against 16.37 for the best tree ensemble
 
-Policy: physics predictions noise-averaged over sigma = **1.67** K, blended **0.87** / 0.13
-with the tree below a predicted yield of **60**, pure physics above.
+Policy: physics predictions noise-averaged over sigma = 1.67 K, blended 0.87 / 0.13 with the
+tree below a predicted yield of 60, pure physics above.
 
 **Speed — measured, not asserted:**
 
@@ -474,13 +493,13 @@ optimization"* — we do not quote a runtime for it, because none is published.
   our error bars widen, but the model still returns physics rather than a clamped constant.
 - **It is inspectable.** A plant engineer can check E1 and E2 against known kinetics and
   reject the model on chemistry, not on a validation curve.
-- **It states its own operating condition — and the condition is joint in (T, tau).**
-  449.9 K is where the *rate constants* cross, not a ceiling on temperature. Yield depends on
-  k·tau, so a hot reactor with a short residence time still performs: **49 training rows sit
-  above the crossover and one reaches 75% yield**, and we predict **54.3%** for a test row at
-  487.9 K with tau = 0.066. The correct statement is that **above 449.9 K every additional
-  unit of residence time costs selectivity**, because k2 now outruns k1 — so past the
-  crossover, tau must be actively shortened rather than temperature simply capped.
+- **Its operating condition is joint in (T, tau), not a temperature ceiling.** 449.9 K is
+  where the *rate constants* cross, not where yield stops. Yield depends on k·tau, so a hot
+  reactor with a short residence time still performs: 49 training rows sit above the
+  crossover and one reaches 75% yield, and we predict 54.3% for a test row at 487.9 K with
+  tau = 0.066. The correct statement is that above 449.9 K, every additional unit of
+  residence time costs selectivity, because k2 now outruns k1 — past the crossover, tau must
+  be actively shortened, not temperature simply capped.
 - **Honest limit:** 150 rows, one reactor geometry. Tube diameter is constant across all
   rows, so it folds into the fitted pre-exponentials and into U. A different tube requires a
   refit, not a retune.

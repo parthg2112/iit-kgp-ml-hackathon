@@ -20,8 +20,11 @@ SIL OFL 1.1 permits redistribution, embedding and modification, including inside
 PDF. Nothing here needs clearing.
 
 An earlier revision of this deck self-hosted two commercial webfonts taken from a third
-party's asset payload, with no established redistribution right and an unidentifiable
-foundry. Those files were removed and replaced with the two above; do not reintroduce them.
+party's asset payload. They have since been identified from their name tables as **PolySans**
+(Gradient) and **Tiempos Text** (Klim Type Foundry), and the Tiempos files were *trial builds*
+(`Test Tiempos Text`, vendor `test-fonts`) licensed for evaluation only and never publishable.
+Removing them was necessary, not merely cautious. Do not reintroduce them, and do not follow
+the font section of any older copy of `support/pitch-deck-design-prompt.md`.
 
 ## Replacing a face
 

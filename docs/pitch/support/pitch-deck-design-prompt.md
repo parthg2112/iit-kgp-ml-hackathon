@@ -99,38 +99,21 @@ them with type).
 
 ## Fonts
 
-Use the two faces from the reference site. Alias them so the deck is not coupled to the source's
-internal names, and confirm the licence permits redistribution before you submit the file — they
-are licensed webfonts, not open-source.
+**Resolved. See `docs/fonts/README.md`; do not follow any older instruction here.**
 
-```css
-/* geometric grotesque — all UI, headings, body */
-@font-face { font-family:"ATW Grotesque"; font-weight:300; font-style:normal;
-             src:url("../fonts/atw-grotesque-300.woff2") format("woff2"); font-display:swap; }
-@font-face { font-family:"ATW Grotesque"; font-weight:400; font-style:normal;
-             src:url("../fonts/atw-grotesque-400.woff2") format("woff2"); font-display:swap; }
-@font-face { font-family:"ATW Grotesque"; font-weight:500; font-style:normal;
-             src:url("../fonts/atw-grotesque-500.woff2") format("woff2"); font-display:swap; }
+This section used to tell you to copy the reference site's own webfont payload and rename it
+into `atw-grotesque-*.woff2` / `atw-serif-*-italic.woff2`. **Do not do that.** Those faces were
+later identified from their name tables as **PolySans** (Gradient) and **Tiempos Text** (Klim
+Type Foundry), and the Tiempos files were *trial builds* licensed for evaluation only and never
+publishable. They were removed from the repo. Re-vendoring them would put unlicensed commercial
+fonts into a submitted deliverable.
 
-/* serif — italic display accent only */
-@font-face { font-family:"ATW Serif"; font-weight:400; font-style:italic;
-             src:url("../fonts/atw-serif-400-italic.woff2") format("woff2"); font-display:swap; }
-@font-face { font-family:"ATW Serif"; font-weight:500; font-style:italic;
-             src:url("../fonts/atw-serif-500-italic.woff2") format("woff2"); font-display:swap; }
-```
+The deck now self-hosts two OFL faces, **Hanken Grotesk** and **Playfair Display Italic**. Both
+are variable, so one file spans the whole weight axis and each `@font-face` declares a weight
+*range*; a single fixed weight would snap every weight to one cut.
 
-Source files (rename on copy):
-
-| Copy from | Rename to |
-| --- | --- |
-| `63a051e803d98e0027228e67_n3.woff2` | `atw-grotesque-300.woff2` |
-| `63a051e803d98e0027228e67_n4.woff2` | `atw-grotesque-400.woff2` |
-| `63a051e803d98e0027228e67_n5.woff2` | `atw-grotesque-500.woff2` |
-| `63a2e064e55aa80038f09228_i4.woff2` | `atw-serif-400-italic.woff2` |
-| `63a2e064e55aa80038f09228_i5.woff2` | `atw-serif-500-italic.woff2` |
-
-Weight discipline, taken from the source: **300 for body, 500 for headings, 400 for UI labels.**
-There is no bold. Do not introduce 600 or 700.
+Weight discipline is unchanged: **300 for body, 500 for headings, 400 for UI labels.** There is
+no bold. Do not introduce 600 or 700.
 
 ## Type scale
 

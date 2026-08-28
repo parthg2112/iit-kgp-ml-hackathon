@@ -175,6 +175,35 @@
     color: var(--ink);
   }
 
+  /* Section colour. Colour lives in fields; type stays ink or cream, whichever contrasts.
+     Contrast over the slab, WCAG on the token hexes: ink 12.42, blue 5.85, purple 3.74,
+     gold 5.80, green 4.33. Slab type is 68px, so AA-large (>=3.0) applies and all pass.
+     Purple and green are AA-large only: do not reuse either at body size. */
+  .stage {
+    --sec: var(--ink);
+    --sec-on: var(--cream);
+  }
+
+  .stage[data-sec="2"] {
+    --sec: var(--blue);
+    --sec-on: var(--cream);
+  }
+
+  .stage[data-sec="3"] {
+    --sec: var(--purple);
+    --sec-on: var(--ink);
+  }
+
+  .stage[data-sec="4"] {
+    --sec: var(--gold);
+    --sec-on: var(--ink);
+  }
+
+  .stage[data-sec="5"] {
+    --sec: var(--green);
+    --sec-on: var(--cream);
+  }
+
   /* motif 2: header bar + roman-numeral rail */
   .bar {
     position: absolute;
@@ -242,7 +271,7 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: var(--orange);
+    background: var(--sec);
   }
 
   /* footer, inside the 48px bottom safe margin */
@@ -377,23 +406,23 @@
     left: 0;
     top: 70px;
     width: 640px;
-    padding: 26px 32px 48px 48px;
-    background: var(--ink);
-    color: var(--cream);
+    padding: 26px 32px var(--slab-pb, 48px) 48px;
+    background: var(--sec);
+    color: var(--sec-on);
+  }
+
+  /* Slide 4's title runs the full measure, so its slab bleeds the whole canvas. */
+  .slab.wide {
+    width: 1280px;
   }
 
   .col.below-slab {
-    padding-top: 280px;
+    padding-top: var(--slab-clear, 280px);
   }
 
-  /* #ef6423 on #2e2e30 is under 4:1, so the accent lightens when reversed */
-  .hl {
-    color: var(--orange);
-  }
-
-  .slab .hl {
-    color: var(--orange-light);
-  }
+  /* The italic word is distinguished by being a serif italic against a grotesque, which is
+     already a full typeface change. It carries no colour: orange on cream is 2.95:1 and
+     orange-light on cream 2.10:1, both below even the AA-large floor. */
 
   /* body emphasis is a weight step, never an italic (see rule 5) */
   em {
@@ -613,7 +642,7 @@
 
   <!-- ================= SLIDE 1 · archetype E ================= -->
   <div class="frame">
-    <section class="stage">
+    <section class="stage" data-sec="1">
       <div class="bar">
         <span class="disc"></span>
         <p class="barlabel">1 &middot; The problem</p>
@@ -710,7 +739,7 @@
 
   <!-- ================= SLIDE 2 · archetype E, chart-led ================= -->
   <div class="frame">
-    <section class="stage">
+    <section class="stage" data-sec="2">
       <div class="bar">
         <span class="disc"></span>
         <p class="barlabel">2 &middot; Chemical understanding</p>
@@ -719,13 +748,16 @@
         </nav>
       </div>
 
-      <div class="work">
-        <div class="divider" style="top:0;height:576px"></div>
-        <div class="two">
-          <div class="col">
-            <h1 class="t-title">Two activation energies, and their <span class="it">ratio</span></h1>
+      <div class="slab" style="--slab-pb:24px">
+        <h1 class="t-title">Two activation energies, and their <span class="it">ratio</span></h1>
+      </div>
 
-            <div class="rule" style="margin-top:24px">
+      <div class="work">
+        <div class="divider" style="top:240px;height:336px"></div>
+        <div class="two">
+          <div class="col below-slab" style="--slab-clear:248px">
+
+            <div class="rule">
               <p class="t-subhead">E₂/E₁ = 5.79</p>
               <p class="t-micro" style="margin-top:10px">Heat accelerates destruction ~6&times; more
                 steeply than formation. The rate constants cross at <strong>449.9 K</strong>, inside
@@ -817,7 +849,7 @@
 
   <!-- ================= SLIDE 3 · archetype E ================= -->
   <div class="frame">
-    <section class="stage">
+    <section class="stage" data-sec="3">
       <div class="bar">
         <span class="disc"></span>
         <p class="barlabel">3 &middot; ML methodology</p>
@@ -921,7 +953,7 @@ dT/dz  =  a1&middot;k1&middot;CA + a2&middot;k2&middot;CB + U&middot;(T_jacket -
 
   <!-- ================= SLIDE 4 · archetype G ================= -->
   <div class="frame">
-    <section class="stage">
+    <section class="stage" data-sec="4">
       <div class="bar">
         <span class="disc"></span>
         <p class="barlabel">4 &middot; Results</p>
@@ -929,11 +961,14 @@ dT/dz  =  a1&middot;k1&middot;CA + a2&middot;k2&middot;CB + U&middot;(T_jacket -
             class="on"><span>IV.</span></span><span><span>V.</span></span></nav>
       </div>
 
+      <div class="slab wide" style="--slab-pb:16px">
+        <h1 class="t-title">What the score <span class="it">actually</span> says</h1>
+      </div>
+
       <div class="work">
         <div class="divider" style="top:208px;height:368px"></div>
-        <h1 class="t-title">What the score <span class="it">actually</span> says</h1>
 
-        <div class="three" style="margin-top:16px">
+        <div class="three" style="margin-top:100px">
           <div class="col rule">
             <h2 class="t-heading">RMSE</h2>
             <p class="metric hl">11.0442</p>
@@ -1049,7 +1084,7 @@ dT/dz  =  a1&middot;k1&middot;CA + a2&middot;k2&middot;CB + U&middot;(T_jacket -
 
   <!-- ================= SLIDE 5 · archetype E ================= -->
   <div class="frame">
-    <section class="stage">
+    <section class="stage" data-sec="5">
       <div class="bar">
         <span class="disc"></span>
         <p class="barlabel">5 &middot; Failure analysis &amp; application</p>

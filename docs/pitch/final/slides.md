@@ -1,11 +1,15 @@
 # Offline Round — 5 Slides, 5 Minutes
 ### Team *Claude ke Chhatore* · Rank 13 / 400
 
-> **This is the presented deck.** `deck.md` / `deck.html` (12 slides) is **backup depth for
+> **This is the presented deck.** `../support/deck.md` / `deck.html` (12 slides) is **backup depth for
 > Q&A only and is not presented** — the guidelines cap the presentation at 5 slides, and
 > additional slides "may not be considered during the judging process."
 >
 > Every number here is checked against `artifacts/` by `scripts/audit_pitch.py`.
+>
+> **Timings, the mark scheme and the rank below are presenter planning, not slide content.**
+> `slides.html` prints none of them; it carries only a page number and, on slide 1, the team
+> line. Read this file as the script, and the HTML as what the room sees.
 
 **Mark scheme this deck is built against (200 total):** Chemical Engineering understanding
 **60** · ML methodology **45** · Leaderboard **40** · Validation & failure analysis **30** ·

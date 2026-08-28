@@ -6,5 +6,9 @@ artifacts/smoke*
 artifacts/*.log
 scratch/
 
-# Generated PDFs (rebuild with scripts/md2pdf.sh)
-docs/pitch/*.pdf
+# Pitch PDFs are tracked on purpose: they are the submitted deliverables, and teammates
+# need them without running a build. Rebuild with scripts/md2pdf.sh or scripts/nb2pdf.sh.
+
+# Obsidian settings in docs/pitch
+docs/pitch/.obsidian/
+

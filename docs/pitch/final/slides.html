@@ -1,574 +1,1272 @@
 <title>Reactor Surrogate Pitch</title>
 
 <style>
-  /* Print-first: five landscape pages, one slide each. Screen mirrors the print layout so
-     what you review is what exports. Print to PDF at A4/Letter landscape, margins "None". */
-  @page { size: 297mm 167mm; margin: 0; }
+  /* Authored on a fixed 1280x720 canvas and uniformly scaled to the viewport.
+     Print emits five 1280x720 pages, one slide each, at scale 1. */
+  @page {
+    size: 338.667mm 190.5mm;
+    margin: 0;
+  }
+
+  /* Both faces are variable, so one file covers the whole weight axis and the range
+     form lets the browser interpolate 300/400/500 rather than snapping to one cut. */
+
+  /* geometric grotesque - all UI, headings, body */
+  @font-face {
+    font-family: "ATW Grotesque";
+    font-weight: 100 900;
+    font-style: normal;
+    src: url("../../fonts/grotesque-variable.woff2") format("woff2");
+    font-display: swap;
+  }
+
+  /* serif - italic display accent only */
+  @font-face {
+    font-family: "ATW Serif";
+    font-weight: 100 900;
+    font-style: italic;
+    src: url("../../fonts/serif-italic-variable.woff2") format("woff2");
+    font-display: swap;
+  }
 
   :root {
-    --ground:      #F1F4F4;
-    --surface:     #FBFCFC;
-    --surface-alt: #E7EDEC;
-    --ink:         #10201F;
-    --ink-soft:    #405351;
-    --ink-mute:    #6B7F7D;
-    --rule:        #CBD8D6;
-    --accent:      #0F6E6E;
-    --accent-soft: #DCEBE9;
-    --hot:         #B03A17;
-    --hot-soft:    #F6E3DC;
-    --display: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
-    --body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    --mono: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --ground: #0A1213; --surface: #101B1C; --surface-alt: #172627;
-      --ink: #E4EDEB; --ink-soft: #A9BDBA; --ink-mute: #7C918E; --rule: #24393A;
-      --accent: #5FC9BE; --accent-soft: #10302F; --hot: #F08256; --hot-soft: #33180F;
-    }
-  }
-  :root[data-theme="dark"] {
-    --ground: #0A1213; --surface: #101B1C; --surface-alt: #172627;
-    --ink: #E4EDEB; --ink-soft: #A9BDBA; --ink-mute: #7C918E; --rule: #24393A;
-    --accent: #5FC9BE; --accent-soft: #10302F; --hot: #F08256; --hot-soft: #33180F;
+    /* ground + ink */
+    --ink: #2e2e30;
+    /* all text; full-bleed divider background */
+    --cream: #fbf4ec;
+    /* default slide background */
+    --cream-shade: #e8dfd4;
+    /* table zebra, subtle fills, disabled */
+
+    /* accent - see usage rules */
+    --orange: #ef6423;
+    /* THE accent: links, active dot, one highlight per slide */
+    --orange-light: #f39454;
+
+    /* reserved for data series only */
+    --blue: #455ca0;
+    --green: #5c7d3a;
+    --purple: #a376b2;
+    --gold: #c9a465;
+    --green-light: #c3d3ad;
+    --lilac: #dbd8e1;
+
+    /* type */
+    --font-display: "ATW Grotesque", ui-sans-serif, system-ui, sans-serif;
+    --font-serif: "ATW Serif", ui-serif, Georgia, serif;
+
+    /* canvas + grid */
+    --canvas-w: 1280px;
+    --canvas-h: 720px;
+    --margin: 48px;
+    --col-3: 288px;
+    --gutter-3: 160px;
+    --col-2: 560px;
+    --gutter-2: 64px;
+    --baseline: 8px;
+
+    /* radii - the source is nearly square-cornered; keep it that way */
+    --r-hairline: 2px;
+    --r-card: 24px;
+    --r-pill: 40px;
+
+    /* sanctioned token: alignment-carrying blocks only (reaction diagrams, ODE systems) */
+    --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+
+    --s: 1;
   }
 
-  * { box-sizing: border-box; }
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  .stage,
+  .stage * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  html {
+    background: var(--cream);
+  }
+
   body {
-    background: var(--ground); color: var(--ink);
-    font-family: var(--body); margin: 0; padding: 0;
+    margin: 0;
+    padding: 0;
+    background: var(--cream);
+    color: var(--ink);
+    font-family: var(--font-display);
+    font-weight: 300;
+    font-size: 16px;
+    line-height: 21px;
+    letter-spacing: 0;
     -webkit-font-smoothing: antialiased;
   }
 
+  /* page chrome (screen only) */
   .controls {
-    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
-    padding: 14px clamp(12px, 3vw, 28px); border-bottom: 1px solid var(--rule);
-    background: var(--surface);
+    display: flex;
+    gap: 24px;
+    align-items: baseline;
+    flex-wrap: wrap;
+    padding: 24px 48px;
+    border-bottom: 1px solid var(--ink);
   }
-  .controls .hint { font-family: var(--mono); font-size: .72rem; color: var(--ink-mute); }
+
+  .controls .hint {
+    font-size: 14px;
+    line-height: 18px;
+    font-weight: 400;
+  }
+
   button {
-    font-family: var(--mono); font-size: .72rem; letter-spacing: .08em; text-transform: uppercase;
-    color: var(--ink); background: var(--ground); border: 1px solid var(--rule);
-    border-radius: 2px; padding: 7px 13px; cursor: pointer;
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 16px;
+    line-height: 20px;
+    letter-spacing: 0;
+    color: var(--ink);
+    background: none;
+    border: 0;
+    border-bottom: 1px solid var(--ink);
+    border-radius: 0;
+    padding: 0 0 2px;
+    cursor: pointer;
   }
-  button:hover { border-color: var(--accent); color: var(--accent); }
-  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-  .deck { padding: clamp(12px, 3vw, 28px); display: flex; flex-direction: column; gap: 28px; }
+  button:hover {
+    color: var(--orange);
+    border-bottom-color: var(--orange);
+  }
 
-  .slide {
-    width: 297mm; min-height: 167mm; max-width: 100%;
-    margin: 0 auto; background: var(--surface); border: 1px solid var(--rule);
-    padding: 13mm 15mm 10mm; position: relative;
-    display: flex; flex-direction: column; gap: 7px;
-    break-after: page; page-break-after: always;
+  button:focus-visible {
+    outline: 1px solid var(--ink);
+    outline-offset: 4px;
   }
-  .slide:last-of-type { break-after: auto; page-break-after: auto; }
 
-  .slide header {
-    display: flex; justify-content: space-between; align-items: baseline;
-    border-bottom: 2px solid var(--ink); padding-bottom: 7px; margin-bottom: 4px;
+  .deck {
+    padding: 48px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 48px;
   }
-  .kicker {
-    font-family: var(--mono); font-size: .64rem; letter-spacing: .16em;
-    text-transform: uppercase; color: var(--accent); margin: 0;
-  }
-  .clock {
-    font-family: var(--mono); font-size: .64rem; letter-spacing: .1em;
-    color: var(--ink-mute); font-variant-numeric: tabular-nums;
-  }
-  h1 {
-    font-family: var(--display); font-weight: 600; font-size: 25pt; line-height: 1.05;
-    letter-spacing: -.015em; margin: 2px 0 0; text-wrap: balance;
-  }
-  h2 {
-    font-family: var(--display); font-weight: 600; font-size: 15pt; line-height: 1.15;
-    margin: 4px 0 0; color: var(--accent); text-wrap: balance;
-  }
-  p { margin: 0; font-size: 10pt; line-height: 1.45; max-width: 95ch; }
-  ul { margin: 0; padding-left: 1.05em; font-size: 10pt; line-height: 1.45;
-       display: flex; flex-direction: column; gap: 4px; }
-  strong { font-weight: 650; }
-  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
-  .cols.wide-left { grid-template-columns: 1.35fr 1fr; }
-  .grow { flex: 1; }
 
-  .hero {
-    font-family: var(--mono); font-variant-numeric: tabular-nums;
-    font-size: 20pt; font-weight: 600; color: var(--accent); line-height: 1.15;
-    background: var(--accent-soft); border-left: 3px solid var(--accent);
-    padding: 9px 13px;
+  /* the fixed canvas */
+  .frame {
+    width: calc(var(--canvas-w) * var(--s));
+    height: calc(var(--canvas-h) * var(--s));
+    break-after: page;
+    page-break-after: always;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
-  .hero small {
-    display: block; font-family: var(--body); font-size: 9.5pt; font-weight: 400;
-    color: var(--ink-soft); margin-top: 4px; letter-spacing: 0; line-height: 1.4;
+
+  .stage {
+    width: var(--canvas-w);
+    height: var(--canvas-h);
+    transform: scale(var(--s));
+    transform-origin: 0 0;
+    position: relative;
+    overflow: hidden;
+    background: var(--cream);
+    color: var(--ink);
   }
-  .callout {
-    background: var(--ground); border: 1px solid var(--rule); border-left: 3px solid var(--hot);
-    padding: 9px 12px; font-size: 9.5pt; line-height: 1.45;
+
+  /* motif 2: header bar + roman-numeral rail */
+  .bar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1280px;
+    height: 70px;
+    background: var(--cream);
   }
-  .callout .tag {
-    font-family: var(--mono); font-size: .6rem; letter-spacing: .13em; text-transform: uppercase;
-    color: var(--hot); display: block; margin-bottom: 3px;
+
+  .bar::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 1280px;
+    height: 1px;
+    background: var(--ink);
   }
+
+  .disc {
+    position: absolute;
+    left: 48px;
+    top: 12px;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--ink);
+  }
+
+  .barlabel {
+    position: absolute;
+    left: 112px;
+    top: 24px;
+    font-size: 16px;
+    line-height: 20px;
+    font-weight: 400;
+  }
+
+  .rail {
+    position: absolute;
+    right: 48px;
+    top: 24px;
+    display: flex;
+  }
+
+  .rail>span {
+    width: 46px;
+    font-size: 16px;
+    line-height: 20px;
+    font-weight: 400;
+  }
+
+  .rail>span>span {
+    position: relative;
+    display: inline-block;
+  }
+
+  .rail>span.on>span::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    margin-left: -4px;
+    top: 34px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--orange);
+  }
+
+  /* footer, inside the 48px bottom safe margin */
+  .foot {
+    position: absolute;
+    left: 48px;
+    right: 48px;
+    top: 680px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 14px;
+    line-height: 18px;
+    font-weight: 400;
+  }
+
+  .foot span:last-child { margin-left: auto; }
+
+  /* work area + columns */
+  .work {
+    position: absolute;
+    left: 48px;
+    top: 96px;
+    width: 1184px;
+    height: 576px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .two {
+    display: grid;
+    grid-template-columns: 560px 560px;
+    column-gap: 64px;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .two.auto {
+    flex: 0 0 auto;
+  }
+
+  .three {
+    display: grid;
+    grid-template-columns: 288px 288px 288px;
+    column-gap: 160px;
+  }
+
+  .col {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .divider {
+    position: absolute;
+    left: 592px;
+    width: 1px;
+    background: var(--ink);
+  }
+
+  /* type scale */
+  .t-title {
+    font-size: 68px;
+    line-height: 72px;
+    font-weight: 500;
+    margin: 0;
+  }
+
+  .t-subhead {
+    font-size: 38px;
+    line-height: 46px;
+    font-weight: 500;
+    margin: 0;
+  }
+
+  .t-heading {
+    font-size: 20px;
+    line-height: 22px;
+    font-weight: 500;
+    margin: 0;
+  }
+
+  .t-body {
+    font-size: 16px;
+    line-height: 21px;
+    font-weight: 300;
+    margin: 0;
+    max-width: 560px;
+  }
+
+  .t-label {
+    font-size: 16px;
+    line-height: 20px;
+    font-weight: 400;
+    margin: 0;
+  }
+
+  .t-micro {
+    font-size: 14px;
+    line-height: 18px;
+    font-weight: 400;
+    margin: 0;
+  }
+
+  .metric {
+    font-size: 68px;
+    line-height: 72px;
+    font-weight: 500;
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .figure-l {
+    font-size: 200px;
+    line-height: 200px;
+    font-weight: 500;
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* the one permitted serif italic, once per slide, in the title */
+  .it {
+    font-family: var(--font-serif);
+    font-weight: 500;
+    font-style: italic;
+  }
+
+  /* ---------- block segmentation: full-bleed ink slab behind the title ----------
+     Display type only. Sized to its title, bleeding off the left edge and up into
+     the header hairline. Column-scoped here, so the right edge lands on the 640
+     midline; 26px above the cap, 48px below the last baseline. */
+  .slab {
+    position: absolute;
+    left: 0;
+    top: 70px;
+    width: 640px;
+    padding: 26px 32px 48px 48px;
+    background: var(--ink);
+    color: var(--cream);
+  }
+
+  .col.below-slab {
+    padding-top: 280px;
+  }
+
+  /* #ef6423 on #2e2e30 is under 4:1, so the accent lightens when reversed */
+  .hl {
+    color: var(--orange);
+  }
+
+  .slab .hl {
+    color: var(--orange-light);
+  }
+
+  /* body emphasis is a weight step, never an italic (see rule 5) */
+  em {
+    font-style: normal;
+    font-weight: 400;
+  }
+
+  strong {
+    font-weight: 500;
+  }
+
+  /* motif 1: hairline rule above a heading */
+  .rule {
+    border-top: 1px solid var(--ink);
+    padding-top: 10px;
+  }
+
+  .gap-b {
+    margin-top: 21px;
+  }
+
+  /* heading -> its body */
+
+  /* lists: hanging en-dash, no bullet characters */
+  ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  li {
+    font-size: 16px;
+    line-height: 21px;
+    font-weight: 300;
+    padding-left: 16px;
+    text-indent: -16px;
+  }
+
+  li::before {
+    content: "\2013\00a0";
+  }
+
+  /* Reaction scheme: typeset, not ASCII. Centred inside its column at the user's
+     request; it is a figure, not body copy. */
+  .rxn { padding: 20px 0 4px; }
+  .rxn-row { display: grid; grid-template-columns: 48px 112px 48px 112px 48px;
+             justify-content: center; align-items: center; justify-items: center; }
+  .rxn .sp { font-size: 38px; line-height: 46px; font-weight: 500; }
+  .rxn .arw { position: relative; width: 112px; height: 46px; }
+  .rxn .arw::before { content: ""; position: absolute; left: 4px; right: 12px; top: 50%;
+                      height: 1px; background: var(--ink); }
+  .rxn .arw::after { content: ""; position: absolute; right: 5px; top: 50%; width: 9px; height: 9px;
+                     border-top: 1px solid var(--ink); border-right: 1px solid var(--ink);
+                     transform: translateY(-50%) rotate(45deg); }
+  .rxn .k { position: absolute; left: 0; right: 0; bottom: 26px; text-align: center;
+            font-size: 16px; line-height: 20px; font-weight: 400; }
+  .rxn .tags { margin-top: 6px; }
+  .rxn .tag { font-size: 14px; line-height: 18px; font-weight: 400; }
+  .rxn .tag::before { content: ""; display: block; width: 1px; height: 14px;
+                      background: var(--ink); margin: 0 auto 6px; }
+
+  /* the ODE system: same treatment, still monospace because the columns align */
+  .odes { display: flex; justify-content: center; padding: 0; }
+  .odes pre { font-size: 17px; line-height: 26px; }
+
+  /* aligned diagram / equation blocks */
   pre {
-    font-family: var(--mono); font-size: 9pt; line-height: 1.5; margin: 0;
-    background: var(--ground); border: 1px solid var(--rule); border-left: 3px solid var(--accent);
-    padding: 9px 12px; overflow-x: auto;
-  }
-  table { border-collapse: collapse; width: 100%; font-size: 9.5pt; }
-  th, td { padding: 4px 9px; text-align: left; border-bottom: 1px solid var(--rule); }
-  thead th {
-    font-family: var(--mono); font-size: .6rem; letter-spacing: .09em; text-transform: uppercase;
-    color: var(--ink-mute); font-weight: 500; background: var(--surface-alt);
-  }
-  tbody tr:last-child td { border-bottom: none; }
-  td.num, th.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
-  tr.ship { background: var(--accent-soft); }
-  tr.ship td { font-weight: 650; }
-  .good { color: var(--accent); font-family: var(--mono); font-variant-numeric: tabular-nums; }
-  .bad  { color: var(--hot); font-family: var(--mono); font-variant-numeric: tabular-nums; }
-  .tablewrap { border: 1px solid var(--rule); overflow-x: auto; }
-  figure { margin: 0; }
-  canvas { width: 100%; height: auto; display: block;
-           border: 1px solid var(--rule); background: var(--ground); }
-  figcaption { font-size: 8.5pt; color: var(--ink-mute); margin-top: 4px; line-height: 1.35; }
-
-  .slide footer {
-    margin-top: auto; padding-top: 7px; border-top: 1px solid var(--rule);
-    display: flex; justify-content: space-between; align-items: baseline;
-    font-family: var(--mono); font-size: .6rem; letter-spacing: .09em;
-    text-transform: uppercase; color: var(--ink-mute);
+    font-family: var(--font-mono);
+    font-size: 15px;
+    line-height: 22px;
+    font-weight: 400;
+    margin: 0;
+    background: none;
+    border: 0;
+    padding: 0;
+    white-space: pre;
   }
 
+  /* tables: hairlines only, no outlines, no boxes */
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  th,
+  td {
+    padding: 4px 0;
+    text-align: left;
+    vertical-align: top;
+    font-size: 16px;
+    line-height: 21px;
+    font-weight: 300;
+    border-bottom: 1px solid var(--cream-shade);
+  }
+
+  th {
+    font-size: 16px;
+    line-height: 20px;
+    font-weight: 400;
+    padding: 0 0 5px;
+    border-bottom: 1px solid var(--ink);
+  }
+
+  td+td,
+  th+th {
+    padding-left: 16px;
+  }
+
+  tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  tr.ship td {
+    font-weight: 500;
+    background: var(--cream-shade);
+  }
+
+  tr.ship td:first-child {
+    box-shadow: -8px 0 0 var(--cream-shade);
+  }
+
+  tr.ship td:last-child {
+    box-shadow: 8px 0 0 var(--cream-shade);
+  }
+
+  /* chart */
+  figure {
+    margin: 0;
+  }
+
+  canvas {
+    display: block;
+    width: 560px;
+    height: 256px;
+  }
+
+  /* presenter notes (screen only) */
   .notes {
-    width: 297mm; max-width: 100%; margin: -20px auto 0;
-    background: var(--surface-alt); border: 1px solid var(--rule); border-top: none;
-    padding: 11px 15mm; font-size: 9.5pt; line-height: 1.5; color: var(--ink-soft);
+    width: calc(var(--canvas-w) * var(--s));
+    margin-top: -24px;
+    padding-top: 10px;
+    border-top: 1px solid var(--ink);
+    font-size: 16px;
+    line-height: 21px;
+    font-weight: 300;
   }
+
   .notes .tag {
-    font-family: var(--mono); font-size: .6rem; letter-spacing: .14em; text-transform: uppercase;
-    color: var(--ink-mute); display: block; margin-bottom: 4px;
+    display: block;
+    font-size: 14px;
+    line-height: 18px;
+    font-weight: 400;
+    margin-bottom: 8px;
   }
-  body.print-mode .notes, body.print-mode .controls { display: none; }
+
+  body.print-mode .notes,
+  body.print-mode .controls {
+    display: none;
+  }
 
   @media print {
-    .controls, .notes { display: none !important; }
-    body, .deck { background: #fff; padding: 0; gap: 0; }
-    .slide { border: none; width: auto; min-height: 167mm; margin: 0; }
+    :root {
+      --s: 1 !important;
+    }
+
+    .controls,
+    .notes {
+      display: none !important;
+    }
+
+    /* block, not flex: break-after is unreliable on flex items */
+    .deck {
+      display: block;
+      padding: 0;
+      gap: 0;
+    }
+
+    .frame {
+      width: 1280px;
+      height: 720px;
+    }
+
+    .frame:last-of-type {
+      break-after: auto;
+      page-break-after: auto;
+    }
+
+    .stage {
+      transform: none;
+    }
   }
-  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      animation: none !important;
+      transition: none !important;
+    }
+  }
 </style>
 
 <div class="controls">
   <button id="printBtn">Print / save as PDF</button>
   <button id="notesBtn" aria-pressed="true">Notes: shown</button>
-  <button id="themeBtn">Toggle theme</button>
-  <span class="hint">5 slides · 5 minutes · landscape · set margins to "None"</span>
+  <span class="hint">5 slides &middot; 5 minutes &middot; landscape &middot; set margins to "None"</span>
 </div>
 
 <div class="deck">
 
-  <!-- ================= SLIDE 1 ================= -->
-  <section class="slide">
-    <header>
-      <div>
-        <p class="kicker">1 · The problem</p>
-        <h1>A reactor where the product destroys itself</h1>
-      </div>
-      <span class="clock">0:00 – 1:00</span>
-    </header>
-
-    <div class="cols wide-left">
-      <div style="display:flex;flex-direction:column;gap:8px">
-<pre>A --k1--&gt; B --k2--&gt; C
-          ^          ^
-       product     waste</pre>
-        <p><strong>B is the product <em>and</em> the feedstock for the waste reaction.</strong>
-          Every second B spends in the reactor, some of it becomes C. Run too short and A never
-          converts; run too long and B is destroyed.</p>
-        <p><strong>What we predict:</strong> yield of B from five operating knobs — feed rate,
-          concentration, inlet temperature, reactor length, jacket temperature.</p>
+  <!-- ================= SLIDE 1 · archetype E ================= -->
+  <div class="frame">
+    <section class="stage">
+      <div class="bar">
+        <span class="disc"></span>
+        <p class="barlabel">1 &middot; The problem</p>
+        <nav class="rail"><span
+            class="on"><span>I.</span></span><span><span>II.</span></span><span><span>III.</span></span><span><span>IV.</span></span><span><span>V.</span></span>
+        </nav>
       </div>
 
-      <div style="display:flex;flex-direction:column;gap:8px">
-        <div class="callout"><span class="tag">Why it matters industrially</span>
-          The rigorous simulation is, in the problem statement's own words,
-          <em>"computationally expensive and too slow for real-time plant optimization."</em>
-          An engineer changing a setpoint cannot wait for a boundary-value solve.
+      <div class="slab">
+        <h1 class="t-title">A reactor where the product <span class="it hl">destroys</span> itself</h1>
+      </div>
+
+      <div class="work">
+        <div class="divider" style="top:264px;height:312px"></div>
+        <div class="two">
+          <div class="col below-slab">
+            <div class="rule">
+              <figure class="rxn" role="img"
+                aria-label="A converts to B with rate constant k1; B converts to C with rate constant k2.">
+                <div class="rxn-row">
+                  <span class="sp">A</span>
+                  <span class="arw"><span class="k">k1</span></span>
+                  <span class="sp">B</span>
+                  <span class="arw"><span class="k">k2</span></span>
+                  <span class="sp">C</span>
+                </div>
+                <div class="rxn-row tags">
+                  <span></span><span></span><span class="tag">product</span>
+                  <span></span><span class="tag">waste</span>
+                </div>
+              </figure>
+            </div>
+
+            <p class="t-body" style="margin-top:24px"><strong>B is the product <em>and</em> the
+                feedstock for the waste reaction.</strong> Every second B spends in the reactor, some
+              of it becomes C. Run too short and A never converts; run too long and B is
+              destroyed.</p>
+          </div>
+
+          <div class="col">
+            <div class="rule">
+              <h2 class="t-heading">What we predict</h2>
+              <p class="t-body gap-b">Yield of B from five operating knobs: feed rate,
+                concentration, inlet temperature, reactor length, jacket temperature.</p>
+            </div>
+
+            <div class="rule" style="margin-top:24px">
+              <h2 class="t-heading">Why it matters industrially</h2>
+              <p class="t-body gap-b">The rigorous simulation is, in the problem statement's own
+                words, <em>"computationally expensive and too slow for real-time plant
+                  optimization."</em> An engineer changing a setpoint cannot wait for a
+                boundary-value solve.</p>
+            </div>
+
+            <div style="margin-top:32px">
+              <table>
+                <thead>
+                  <tr>
+                    <th>150 operating conditions</th>
+                    <th class="num">Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr class="ship">
+                    <td>Our surrogate</td>
+                    <td class="num">24.8 ms</td>
+                  </tr>
+                  <tr>
+                    <td>SciPy BDF solve, same system</td>
+                    <td class="num">5573 ms</td>
+                  </tr>
+                  <tr>
+                    <td><strong>Speed-up</strong></td>
+                    <td class="num"><strong>225&times;</strong></td>
+                  </tr>
+                </tbody>
+              </table>
+              <p class="t-micro" style="margin-top:12px">And the two agree to 0.017 yield-points.</p>
+            </div>
+          </div>
         </div>
-        <div class="tablewrap">
-          <table>
-            <thead><tr><th>150 operating conditions</th><th class="num">Time</th></tr></thead>
-            <tbody>
-              <tr class="ship"><td>Our surrogate</td><td class="num">24.8 ms</td></tr>
-              <tr><td>SciPy BDF solve, same system</td><td class="num">5573 ms</td></tr>
-              <tr><td><strong>Speed-up</strong></td><td class="num"><strong>225×</strong></td></tr>
-            </tbody>
-          </table>
-        </div>
-        <p style="font-size:9pt;color:var(--ink-mute)">…and the two agree to 0.017 yield-points.</p>
       </div>
-    </div>
 
-    <footer><span>Claude ke Chhatore</span><span>Rank 13 / 400</span></footer>
-  </section>
-  <div class="notes"><span class="tag">Presenter notes · 60 s</span>
-    Lead with chemistry, not ML — the guidelines say judges should understand the chemical
+      <div class="foot"><span>Claude ke Chhatore &middot; Kashish &middot; Parth &middot; Shreya</span><span>1 / 5</span></div>
+    </section>
+  </div>
+  <div class="notes"><span class="tag">Presenter notes &middot; 60 s</span>
+    Lead with chemistry, not ML. The guidelines say judges should understand the chemical
     problem <em>before</em> the model. The sentence that must land: <em>the product is also the
-    reactant for the side reaction</em>, which is what makes this an optimum rather than a
-    monotone response. Do not quote a runtime for the organisers' simulation — it was never
-    published; the 225× is against a solver we timed ourselves.
+      reactant for the side reaction</em>, which is what makes this an optimum rather than a
+    monotone response. Do not quote a runtime for the organisers' simulation. It was never published; the 225&times; is
+    against a solver we timed ourselves.
   </div>
 
-  <!-- ================= SLIDE 2 ================= -->
-  <section class="slide">
-    <header>
-      <div>
-        <p class="kicker">2 · Chemical understanding</p>
-        <h1>Two activation energies, and their ratio</h1>
-      </div>
-      <span class="clock">1:00 – 2:00</span>
-    </header>
-
-    <div class="cols">
-      <div style="display:flex;flex-direction:column;gap:7px">
-        <div class="tablewrap">
-          <table>
-            <thead><tr><th>Reaction</th><th class="num">Activation energy</th></tr></thead>
-            <tbody>
-              <tr><td>Desired A → B</td><td class="num">43.16 kJ/mol</td></tr>
-              <tr><td>Waste B → C</td><td class="num">250.07 kJ/mol</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="hero">E₂/E₁ = 5.79
-          <small>Heat accelerates destruction ~6× more steeply than formation. The rate
-            constants cross at <strong>449.9 K</strong>, inside the observed 351.6–548.0 K.</small>
-        </div>
-        <div class="callout"><span class="tag">But it is not a temperature ceiling</span>
-          Yield depends on k·τ, not k. Run hot with a short residence time and B leaves before
-          it degrades: <strong>49 training rows sit above the crossover and one reaches 75%
-          yield.</strong> The rule is joint in (T, τ) — above 449.9 K, every extra unit of
-          residence time costs selectivity.
-        </div>
+  <!-- ================= SLIDE 2 · archetype E, chart-led ================= -->
+  <div class="frame">
+    <section class="stage">
+      <div class="bar">
+        <span class="disc"></span>
+        <p class="barlabel">2 &middot; Chemical understanding</p>
+        <nav class="rail"><span><span>I.</span></span><span
+            class="on"><span>II.</span></span><span><span>III.</span></span><span><span>IV.</span></span><span><span>V.</span></span>
+        </nav>
       </div>
 
-      <div style="display:flex;flex-direction:column;gap:7px">
-        <figure>
-          <canvas id="arr" width="900" height="330" role="img"
-            aria-label="Arrhenius plot of k1 and k2 versus temperature, crossing at 449.9 K."></canvas>
-          <figcaption>Rate constants from the fitted parameters. Left of the crossover the
-            reactor makes B faster than it destroys it; right of it, selectivity collapses.</figcaption>
-        </figure>
-        <div class="tablewrap">
-          <table>
-            <thead><tr><th>Why feed concentration does nothing (r = +0.009)</th><th class="num">Adiabatic swing</th></tr></thead>
-            <tbody>
-              <tr><td>a₁ (A → B) = −11.79 K·L/mol</td><td class="num">−27 K</td></tr>
-              <tr><td>a₂ (B → C) = +11.34 K·L/mol</td><td class="num">+26 K</td></tr>
-              <tr class="ship"><td>Net</td><td class="num">−1 K</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <p style="font-size:9.5pt">Opposite signs, near-equal magnitude — they cancel. <em>Not</em>
-          thermal neutrality: forcing a₁ = a₂ = 0 costs <span class="bad">8.27</span> vs 3.66 train.
-          Likewise <strong>corr(log τ, yield) = +0.061</strong> is an interior optimum, not
-          irrelevance.</p>
-      </div>
-    </div>
+      <div class="work">
+        <div class="divider" style="top:0;height:576px"></div>
+        <div class="two">
+          <div class="col">
+            <h1 class="t-title">Two activation energies, and their <span class="it">ratio</span></h1>
 
-    <footer><span>Chemical understanding · 60 of 200 marks</span><span>2 / 5</span></footer>
-  </section>
-  <div class="notes"><span class="tag">Presenter notes · 60 s</span>
-    Highest-weight slide. Three claims, each a number: the ratio, the joint (T, τ) rule, the
-    a₁/a₂ cancellation. If a reaction engineer challenges the crossover as an operating limit,
-    agree immediately and give the 75%-yield row — we tested that ourselves. The concentration
-    argument is most likely to be probed: the tempting answer ("first-order, CA₀ cancels") is
-    incomplete, and the next one ("thermally neutral") is measurably wrong.
+            <div class="rule" style="margin-top:24px">
+              <p class="t-subhead">E₂/E₁ = 5.79</p>
+              <p class="t-micro" style="margin-top:10px">Heat accelerates destruction ~6&times; more
+                steeply than formation. The rate constants cross at <strong>449.9 K</strong>, inside
+                the observed 351.6&ndash;548.0 K.</p>
+            </div>
+
+            <div class="rule" style="margin-top:16px">
+              <h2 class="t-heading">But it is not a temperature ceiling</h2>
+              <p class="t-body gap-b">Yield depends on k&middot;&tau;, not k. Run hot with a short
+                residence time and B leaves before it degrades: <strong>49 training rows sit above
+                  the crossover and one reaches 75% yield.</strong> The rule is joint in (T, &tau;):
+                above 449.9 K, every extra unit of residence time costs selectivity.</p>
+            </div>
+
+            <p class="t-micro" style="margin-top:16px">Opposite signs, near-equal magnitude: they
+              cancel. <em>Not</em> thermal neutrality: forcing a₁ = a₂ = 0 costs 8.27 vs 3.66
+              train. Likewise <strong>corr(log &tau;, yield) = +0.061</strong> is an interior
+              optimum, not irrelevance.</p>
+          </div>
+
+          <div class="col">
+            <figure>
+              <canvas id="arr" width="560" height="256" role="img"
+                aria-label="Arrhenius plot of k1 and k2 versus temperature, crossing at 449.9 K."></canvas>
+              <figcaption class="t-micro" style="margin-top:8px">Rate constants from the fitted
+                parameters. Left of the crossover the reactor makes B faster than it destroys it;
+                right of it, selectivity collapses.</figcaption>
+            </figure>
+
+            <div class="rule" style="margin-top:20px">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Reaction</th>
+                    <th class="num">Activation energy</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Desired A &rarr; B</td>
+                    <td class="num">43.16 kJ/mol</td>
+                  </tr>
+                  <tr>
+                    <td>Waste B &rarr; C</td>
+                    <td class="num">250.07 kJ/mol</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="rule" style="margin-top:20px">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Why feed concentration does nothing (r = +0.009)</th>
+                    <th class="num">Adiabatic swing</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>a₁ (A &rarr; B) = &minus;11.79 K&middot;L/mol</td>
+                    <td class="num">&minus;27 K</td>
+                  </tr>
+                  <tr>
+                    <td>a₂ (B &rarr; C) = +11.34 K&middot;L/mol</td>
+                    <td class="num">+26 K</td>
+                  </tr>
+                  <tr class="ship">
+                    <td>Net</td>
+                    <td class="num">&minus;1 K</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="foot"><span>2 / 5</span></div>
+    </section>
+  </div>
+  <div class="notes"><span class="tag">Presenter notes &middot; 60 s</span>
+    Highest-weight slide. Three claims, each a number: the ratio, the joint (T, &tau;) rule, the
+    a₁/a₂ cancellation. If a reaction engineer challenges the crossover as an operating
+    limit, agree immediately and give the 75%-yield row; we tested that ourselves. The
+    concentration argument is most likely to be probed: the tempting answer ("first-order,
+    CA₀ cancels") is incomplete, and the next one ("thermally neutral") is measurably wrong.
   </div>
 
-  <!-- ================= SLIDE 3 ================= -->
-  <section class="slide">
-    <header>
-      <div>
-        <p class="kicker">3 · ML methodology</p>
-        <h1>We recovered the reactor, not a regressor</h1>
-      </div>
-      <span class="clock">2:00 – 3:15</span>
-    </header>
-
-    <div class="cols wide-left">
-      <div style="display:flex;flex-direction:column;gap:7px">
-<pre>dCA/dz = -k1·CA
-dCB/dz =  k1·CA - k2·CB
-dT/dz  =  a1·k1·CA + a2·k2·CB + U·(T_jacket - T)</pre>
-        <p><strong>7 physical parameters. Fixed functional form. No architecture search</strong>
-          — the form came from the chemistry, so there was nothing to search.</p>
-        <div class="tablewrap">
-          <table>
-            <thead><tr><th>Model</th><th>Protocol</th><th class="num">RMSE</th></tr></thead>
-            <tbody>
-              <tr><td>Best tree ensemble (+ physics features)</td><td>10f-CV</td><td class="num bad">16.37</td></tr>
-              <tr class="ship"><td>Physics ODE</td><td>10f-CV</td><td class="num">6.36</td></tr>
-              <tr><td>Physics ODE</td><td>training fit</td><td class="num">3.66</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="callout"><span class="tag">Why this approach for this problem</span>
-          150 rows cannot support a flexible model at a sharp cliff, and a tree cannot
-          extrapolate past its outermost split. An ODE can — and its parameters are quantities
-          a process engineer can check against known kinetics.
-        </div>
+  <!-- ================= SLIDE 3 · archetype E ================= -->
+  <div class="frame">
+    <section class="stage">
+      <div class="bar">
+        <span class="disc"></span>
+        <p class="barlabel">3 &middot; ML methodology</p>
+        <nav class="rail"><span><span>I.</span></span><span><span>II.</span></span><span
+            class="on"><span>III.</span></span><span><span>IV.</span></span><span><span>V.</span></span></nav>
       </div>
 
-      <div style="display:flex;flex-direction:column;gap:7px">
-        <h2>Three choices, each measured</h2>
-        <ul>
-          <li><strong>Noise-averaged prediction</strong> at σ = 1.67 K, fixed <em>a priori</em>
-            from an errors-in-variables fit — never tuned on the CV that judges it. It makes the
-            <em>training</em> fit worse (3.656 → 3.764) and cross-validation better
-            (6.358 → 5.928) on all three seeds. A blur that helps held-out error is evidence of
-            input noise, not overfitting.</li>
-          <li><strong>A 13% ExtraTrees component</strong>, weight <em>derived</em> not tuned:
-            error correlation ρ = 0.070 between the two models gives a variance-optimal
-            w* = 0.887; we ship 0.87.</li>
-          <li><strong>Validation.</strong> Repeated 10-fold plus cold-start folds refit from
-            scratch (5.98) — two independent protocols agreeing.</li>
-        </ul>
-        <div class="callout"><span class="tag">A limit of our own protocol</span>
-          Leave-one-seed-out <em>underprices</em> hyper-parameter selection, because all seeds
-          re-partition the same 150 rows. Measured at row level, selection costs
-          <strong>+0.371 RMSE</strong> — so we read our 5.671 as a lower bound.
+      <div class="slab">
+        <h1 class="t-title">We <span class="it hl">recovered</span> the reactor, not a regressor</h1>
+      </div>
+
+      <div class="work">
+        <div class="divider" style="top:264px;height:312px"></div>
+        <div class="two">
+          <div class="col below-slab">
+            <div class="rule">
+              <div class="odes">
+<pre>dCA/dz = -k1&middot;CA
+dCB/dz =  k1&middot;CA - k2&middot;CB
+dT/dz  =  a1&middot;k1&middot;CA + a2&middot;k2&middot;CB + U&middot;(T_jacket - T)</pre>
+              </div>
+            </div>
+
+            <p class="t-body" style="margin-top:16px"><strong>7 physical parameters. Fixed functional
+                form. No architecture search</strong>. The form came from the chemistry, so
+              there was nothing to search.</p>
+
+            <div class="rule" style="margin-top:16px">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Model</th>
+                    <th>Protocol</th>
+                    <th class="num">RMSE</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Best tree ensemble (+ physics features)</td>
+                    <td>10f-CV</td>
+                    <td class="num">16.37</td>
+                  </tr>
+                  <tr class="ship">
+                    <td>Physics ODE</td>
+                    <td>10f-CV</td>
+                    <td class="num">6.36</td>
+                  </tr>
+                  <tr>
+                    <td>Physics ODE</td>
+                    <td>training fit</td>
+                    <td class="num">3.66</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="col">
+            <div class="rule">
+              <h2 class="t-heading">Three choices, each measured</h2>
+              <ul class="gap-b">
+                <li><strong>Noise-averaged prediction</strong> at &sigma; = 1.67 K, fixed <em>a priori</em> from
+                errors-in-variables, never tuned on the CV that judges it. Training worse
+                (3.656 &rarr; 3.764), cross-validation better (6.358 &rarr; 5.928) on all three
+                seeds: input noise, not overfitting.
+                </li>
+                <li><strong>A 13% ExtraTrees component</strong>, weight <em>derived</em> not tuned: error
+                correlation &rho; = 0.070 gives a variance-optimal w* = 0.887; we ship 0.87.</li>
+                <li><strong>Validation.</strong> Repeated 10-fold plus cold-start folds refit from
+                  scratch (5.98): two independent protocols agreeing.</li>
+              </ul>
+            </div>
+
+            <div class="rule" style="margin-top:20px">
+              <h2 class="t-heading">A limit of our own protocol</h2>
+              <p class="t-micro" style="margin-top:12px">Leave-one-seed-out <em>underprices</em> hyper-parameter selection: all seeds
+              re-partition the same 150 rows. At row level that costs <strong>+0.371 RMSE</strong>,
+              so 5.671 is a lower bound.</p>
+            </div>
+
+            <div class="rule" style="margin-top:20px">
+              <h2 class="t-heading">Why this approach for this problem</h2>
+              <p class="t-micro" style="margin-top:12px">150 rows cannot support a flexible model at a sharp cliff; a tree cannot
+              extrapolate past its outermost split. An ODE can, and an engineer can check its
+              parameters against known kinetics.</p>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
 
-    <footer><span>ML methodology · 45 of 200 marks</span><span>3 / 5</span></footer>
-  </section>
-  <div class="notes"><span class="tag">Presenter notes · 75 s</span>
-    The rubric asks "why <em>this</em> approach for <em>this</em> problem" — answer in those
-    terms: small n, sharp cliff, need for extrapolation and inspectability. The LOSO-limitation
-    line is deliberate: volunteering a flaw in our own protocol is worth more than the 0.4 RMSE
-    it costs, and a judge spotting it first would cost far more.
+      <div class="foot"><span>3 /
+          5</span></div>
+    </section>
+  </div>
+  <div class="notes"><span class="tag">Presenter notes &middot; 75 s</span>
+    The rubric asks "why <em>this</em> approach for <em>this</em> problem". Answer in those terms: small n, sharp cliff,
+    need for extrapolation and inspectability. The LOSO-limitation
+    line is deliberate: volunteering a flaw in our own protocol is worth more than the 0.4 RMSE it
+    costs, and a judge spotting it first would cost far more.
   </div>
 
-  <!-- ================= SLIDE 4 ================= -->
-  <section class="slide">
-    <header>
-      <div>
-        <p class="kicker">4 · Results</p>
-        <h1>What the score actually says</h1>
-      </div>
-      <span class="clock">3:15 – 4:15</span>
-    </header>
-
-    <div class="cols">
-      <div style="display:flex;flex-direction:column;gap:7px">
-        <div class="hero">RMSE 11.0442 · MAE 3.2408 · R² 0.9061
-          <small>Rank <strong>13 of 400</strong>. The two error metrics disagree — and that
-            disagreement is the finding.</small>
-        </div>
-        <div class="hero" style="font-size:15pt">RMSE / MAE = 3.41
-          <small>Gaussian errors give 1.25, Laplace 1.41. A ratio this high cannot come from
-            broadly mediocre prediction.</small>
-        </div>
-        <div class="tablewrap">
-          <table>
-            <thead><tr><th class="num">Rows missed badly</th><th class="num">Their error</th><th class="num">Error on the other ~47</th></tr></thead>
-            <tbody>
-              <tr><td class="num">2</td><td class="num bad">55.0</td><td class="num good">1.09</td></tr>
-              <tr><td class="num">3</td><td class="num bad">45.0</td><td class="num good">0.57</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <p><strong>≈47 of 50 rows predicted to about 1 yield-point. Two or three cliff rows
-          missed by ~50.</strong> R² 0.9061 implies a test spread of 36.0 vs 38.3 in training —
-          the test set matches the training distribution, which a two-sample classifier
-          confirmed independently (AUC 0.500, indistinguishable).</p>
+  <!-- ================= SLIDE 4 · archetype G ================= -->
+  <div class="frame">
+    <section class="stage">
+      <div class="bar">
+        <span class="disc"></span>
+        <p class="barlabel">4 &middot; Results</p>
+        <nav class="rail"><span><span>I.</span></span><span><span>II.</span></span><span><span>III.</span></span><span
+            class="on"><span>IV.</span></span><span><span>V.</span></span></nav>
       </div>
 
-      <div style="display:flex;flex-direction:column;gap:7px">
-        <h2>Independent replication of the physics</h2>
-        <p style="font-size:9.5pt">A separate blind refit — different integrator (LSODA),
-          different optimizer, no access to our code or notes.</p>
-        <div class="tablewrap">
-          <table>
-            <thead><tr><th>Parameter</th><th class="num">Ours</th><th class="num">Blind</th></tr></thead>
-            <tbody>
-              <tr><td>E₁ (kJ/mol)</td><td class="num">43.161</td><td class="num">43.156</td></tr>
-              <tr><td>E₂ (kJ/mol)</td><td class="num">250.072</td><td class="num">250.53</td></tr>
-              <tr><td>a₁</td><td class="num">−11.7919</td><td class="num">−11.7961</td></tr>
-              <tr class="ship"><td>train RMSE</td><td class="num">3.6559</td><td class="num">3.6554</td></tr>
-            </tbody>
-          </table>
+      <div class="work">
+        <div class="divider" style="top:208px;height:368px"></div>
+        <h1 class="t-title">What the score <span class="it">actually</span> says</h1>
+
+        <div class="three" style="margin-top:16px">
+          <div class="col rule">
+            <h2 class="t-heading">RMSE</h2>
+            <p class="metric hl">11.0442</p>
+          </div>
+          <div class="col rule">
+            <h2 class="t-heading">MAE</h2>
+            <p class="metric">3.2408</p>
+          </div>
+          <div class="col rule">
+            <h2 class="t-heading">R&sup2;</h2>
+            <p class="metric">0.9061</p>
+          </div>
         </div>
-        <div class="callout"><span class="tag">What we got right — and what we did not</span>
-          We pre-registered the failure <em>mechanism</em>: a handful of cliff rows would carry
-          nearly all squared error. The score confirms it. But we
-          <strong>underestimated the magnitude</strong> — our own bootstrap put RMSE in
-          [2.94, 8.10] and 11.04 sits outside it. Our MAE prediction was accurate (observed
-          3.24, predicted [1.74, 4.03]). Our 150 training rows never produced a miss above 40
-          points; the test set produced two or three.
+
+        <div class="two auto" style="margin-top:16px">
+          <div class="col">
+            <div class="rule">
+              <table>
+                <thead>
+                  <tr>
+                    <th class="num">Rows missed badly</th>
+                    <th class="num">Their error</th>
+                    <th class="num">Error on the other ~47</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="num">2</td>
+                    <td class="num">55.0</td>
+                    <td class="num">1.09</td>
+                  </tr>
+                  <tr>
+                    <td class="num">3</td>
+                    <td class="num">45.0</td>
+                    <td class="num">0.57</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="rule" style="margin-top:20px">
+              <h2 class="t-heading">Independent replication of the physics</h2>
+              <p class="t-micro" style="margin-top:10px">A separate blind refit: different integrator (LSODA), different
+                optimizer, no access to our code or notes.</p>
+              <table style="margin-top:10px">
+                <thead>
+                  <tr>
+                    <th>Parameter</th>
+                    <th class="num">Ours</th>
+                    <th class="num">Blind</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>E₁ (kJ/mol)</td>
+                    <td class="num">43.161</td>
+                    <td class="num">43.156</td>
+                  </tr>
+                  <tr>
+                    <td>E₂ (kJ/mol)</td>
+                    <td class="num">250.072</td>
+                    <td class="num">250.53</td>
+                  </tr>
+                  <tr>
+                    <td>a₁</td>
+                    <td class="num">&minus;11.7919</td>
+                    <td class="num">&minus;11.7961</td>
+                  </tr>
+                  <tr class="ship">
+                    <td>train RMSE</td>
+                    <td class="num">3.6559</td>
+                    <td class="num">3.6554</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="col">
+            <div class="rule">
+              <p class="t-micro">Rank <strong>13 of 400</strong>. The metrics disagree, and that is the finding:
+                <strong>RMSE / MAE = 3.41</strong> against 1.25 Gaussian, 1.41 Laplace. Too high
+                for broadly mediocre prediction.</p>
+            </div>
+
+            <p class="t-micro" style="margin-top:16px"><strong>&asymp;47 of 50 rows predicted to about 1 yield-point. Two or three cliff rows
+            missed by ~50.</strong> R&sup2; 0.9061 implies a test spread of 36.0 vs 38.3 in
+            training, and a two-sample classifier confirms the match (AUC 0.500).</p>
+
+            <div class="rule" style="margin-top:20px">
+              <h2 class="t-heading">What we got right, and what we did not</h2>
+              <p class="t-micro" style="margin-top:12px">We pre-registered the <em>mechanism</em>: a few cliff rows carry nearly all
+              squared error. The score confirms it, but we <strong>underestimated the
+              magnitude</strong>. Our bootstrap put RMSE in [2.94, 8.10]; 11.04 sits outside.
+              MAE we called: 3.24 observed, [1.74, 4.03] predicted. None of our 150 training
+              rows missed by over 40 points; the test set produced two or three.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
 
-    <footer><span>Leaderboard 40 + validation 30 of 200 marks</span><span>4 / 5</span></footer>
-  </section>
-  <div class="notes"><span class="tag">Presenter notes · 60 s</span>
-    Do not present the decomposition as an excuse — present it as the error analysis the rubric
-    asks for. The honest framing wins: <em>we called the mechanism, we underestimated the
-    magnitude.</em> If asked "so your CV was wrong" — yes, on the tail; it was right on the
+      <div class="foot"><span>4 /
+          5</span></div>
+    </section>
+  </div>
+  <div class="notes"><span class="tag">Presenter notes &middot; 60 s</span>
+    Do not present the decomposition as an excuse; present it as the error analysis the
+    rubric asks for. The honest framing wins: <em>we called the mechanism, we underestimated the
+      magnitude.</em> If asked "so your CV was wrong": yes, on the tail; it was right on the
     median and on MAE. That is what a 150-row training set buys you.
   </div>
 
-  <!-- ================= SLIDE 5 ================= -->
-  <section class="slide">
-    <header>
-      <div>
-        <p class="kicker">5 · Failure analysis &amp; application</p>
-        <h1>Where it fails, and how you would tell</h1>
-      </div>
-      <span class="clock">4:15 – 5:00</span>
-    </header>
-
-    <div class="cols">
-      <div style="display:flex;flex-direction:column;gap:7px">
-        <h2>If this started predicting badly tomorrow</h2>
-        <div class="tablewrap">
-          <table>
-            <thead><tr><th>Source</th><th>Symptom</th></tr></thead>
-            <tbody>
-              <tr><td><strong>Chemical</strong></td><td>Fouling raises U · catalyst degradation shifts k₁ · feed change moves CA₀ · operation outside 351.6–548.0 K</td></tr>
-              <tr><td><strong>Sensor / data</strong></td><td>Near the cliff a <strong>2 K</strong> temperature error becomes a ~20-point yield error. Median measured input offset <strong>1.67 K</strong>; <strong>12 of 150</strong> rows resist any offset within ±25 K</td></tr>
-              <tr><td><strong>ML / model</strong></td><td>The cliff: <strong>29% of rows carry 91%</strong> of squared error. Our blend also lifts 6 dead-reactor predictions above 5% yield (max 11.5)</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="callout"><span class="tag">Known limits, stated plainly</span>
-          150 rows, one reactor geometry. Tube diameter is constant across every row, so it
-          folds into the fitted pre-exponentials — a different tube needs a refit, not a
-          rescale. And the cliff rows stay genuinely hard: we tested 8 independent improvement
-          strategies after submission and none cleared our adoption bar.
-        </div>
+  <!-- ================= SLIDE 5 · archetype E ================= -->
+  <div class="frame">
+    <section class="stage">
+      <div class="bar">
+        <span class="disc"></span>
+        <p class="barlabel">5 &middot; Failure analysis &amp; application</p>
+        <nav class="rail">
+          <span><span>I.</span></span><span><span>II.</span></span><span><span>III.</span></span><span><span>IV.</span></span><span
+            class="on"><span>V.</span></span></nav>
       </div>
 
-      <div style="display:flex;flex-direction:column;gap:7px">
-        <h2>The diagnostic — and it works only because the model is mechanistic</h2>
-        <div class="hero" style="font-size:13pt">Refit the seven parameters and read which one moved
-          <small>A black-box model tells you the prediction is wrong. It cannot tell you which
-            piece of the plant changed.</small>
-        </div>
-        <div class="tablewrap">
-          <table>
-            <thead><tr><th>What moves</th><th>Diagnosis</th></tr></thead>
-            <tbody>
-              <tr><td><strong>U</strong> alone</td><td>heat-transfer fouling</td></tr>
-              <tr><td><strong>k₁</strong> alone</td><td>catalyst degradation</td></tr>
-              <tr><td>CA₀ path only</td><td>feed composition change</td></tr>
-              <tr><td>Nothing moves, errors rise</td><td>sensor drift or unmodelled phenomenon</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <p>That is the practical case for recovering the reactor instead of approximating it:
-          the model is not just a predictor, it is an <strong>instrument</strong>.</p>
+      <div class="slab">
+        <h1 class="t-title">Where it fails, and how you would <span class="it hl">tell</span></h1>
       </div>
-    </div>
 
-    <footer><span>Failure analysis · 30 of 200 marks</span><span>5 / 5</span></footer>
-  </section>
-  <div class="notes"><span class="tag">Presenter notes · 45 s</span>
-    The guidelines ask two questions almost verbatim: what could cause incorrect predictions,
-    and how would you tell chemical from sensor from model. Answer the second directly — the
-    parameter-attribution table is the strongest thing in this deck and the natural closing
-    note. End on the diagnostic, not on the RMSE.
+      <div class="work">
+        <div class="divider" style="top:264px;height:312px"></div>
+        <div class="two">
+          <div class="col below-slab">
+            <div class="rule">
+              <h2 class="t-heading">If this started predicting badly tomorrow</h2>
+              <table style="margin-top:16px">
+                <thead>
+                  <tr>
+                    <th style="width:128px">Source</th>
+                    <th>Symptom</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><strong>Chemical</strong></td>
+                    <td>Fouling raises U &middot; catalyst
+                      degradation shifts k₁ &middot; feed change moves CA₀ &middot; operation outside
+                      351.6&ndash;548.0 K</td>
+                  </tr>
+                  <tr>
+                    <td><strong>Sensor / data</strong></td>
+                    <td>Near the cliff a <strong>2 K</strong>
+                      temperature error becomes a ~20-point yield error. Median measured input offset
+                      <strong>1.67 K</strong>; <strong>12 of 150</strong> rows resist any offset within
+                      &plusmn;25 K
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><strong>ML / model</strong></td>
+                    <td>The cliff: <strong>29% of rows carry
+                        91%</strong> of squared error. Our blend also lifts 6 dead-reactor predictions
+                      above 5% yield (max 11.5)</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="col">
+            <div class="rule">
+              <h2 class="t-heading">The diagnostic, and it works only because the model is mechanistic</h2>
+              <p class="t-subhead" style="margin-top:16px">Refit the seven parameters and read which one moved</p>
+              <p class="t-micro" style="margin-top:12px">A black-box model tells you the prediction is
+                wrong. It cannot tell you which piece of the plant changed.</p>
+            </div>
+
+            <div class="rule" style="margin-top:20px">
+              <table>
+                <thead>
+                  <tr>
+                    <th>What moves</th>
+                    <th>Diagnosis</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><strong>U</strong> alone</td>
+                    <td>heat-transfer fouling</td>
+                  </tr>
+                  <tr>
+                    <td><strong>k₁</strong> alone</td>
+                    <td>catalyst degradation</td>
+                  </tr>
+                  <tr>
+                    <td>CA₀ path only</td>
+                    <td>feed composition change</td>
+                  </tr>
+                  <tr>
+                    <td>Nothing moves, errors rise</td>
+                    <td>sensor drift or unmodelled phenomenon</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="rule" style="margin-top:20px">
+              <h2 class="t-heading">Known limits, stated plainly</h2>
+              <p class="t-micro" style="margin-top:12px">150 rows, one reactor geometry. Tube diameter is constant across rows, so it folds
+              into the fitted pre-exponentials; a different tube needs a refit, not a rescale. Cliff
+              rows stay hard: 8 strategies tested after submission, none cleared our bar. Hence
+              recovering the reactor rather than approximating it: not just a predictor, an
+              <strong>instrument</strong>.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="foot"><span>5 /
+          5</span></div>
+    </section>
+  </div>
+  <div class="notes"><span class="tag">Presenter notes &middot; 45 s</span>
+    The guidelines ask two questions almost verbatim: what could cause incorrect predictions, and
+    how would you tell chemical from sensor from model. Answer the second directly: the parameter-attribution table is
+    the strongest thing in this deck and the natural closing note.
+    End on the diagnostic, not on the RMSE.
   </div>
 </div>
 
 <script>
-(function () {
-  var nb = document.getElementById('notesBtn');
-  nb.addEventListener('click', function () {
-    var hidden = document.body.classList.toggle('print-mode');
-    nb.setAttribute('aria-pressed', String(!hidden));
-    nb.textContent = 'Notes: ' + (hidden ? 'hidden' : 'shown');
-  });
-  document.getElementById('printBtn').addEventListener('click', function () { window.print(); });
-  document.getElementById('themeBtn').addEventListener('click', function () {
-    var root = document.documentElement, ex = root.getAttribute('data-theme');
-    var dark = ex ? ex === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
-    root.setAttribute('data-theme', dark ? 'light' : 'dark');
-    draw();
-  });
+  (function () {
+    var nb = document.getElementById('notesBtn');
+    nb.addEventListener('click', function () {
+      var hidden = document.body.classList.toggle('print-mode');
+      nb.setAttribute('aria-pressed', String(!hidden));
+      nb.textContent = 'Notes: ' + (hidden ? 'hidden' : 'shown');
+    });
+    document.getElementById('printBtn').addEventListener('click', function () { window.print(); });
 
-  // Arrhenius curves computed in-page from the fitted parameters, so the figure can never
-  // drift from artifacts/physics_params.json.
-  var LN_K1 = 2.718739542774161, E1 = 43161.27219874831;
-  var LN_K2 = 0.15940771227404235, E2 = 250072.4920452807;
-  var R = 8.314, TREF = 430, TCROSS = 449.894, TMIN = 360, TMAX = 550;
-
-  function log10k(lnk, E, T) { return (lnk - (E / R) * (1 / T - 1 / TREF)) / Math.LN10; }
-  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
-
-  function draw() {
-    var cv = document.getElementById('arr'); if (!cv) return;
-    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth || 900, H = 330;
-    cv.width = W * dpr; cv.height = H * dpr;
-    var g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
-
-    var ink = css('--ink'), mute = css('--ink-mute'), rule = css('--rule');
-    var accent = css('--accent'), hot = css('--hot'), surf = css('--surface');
-    var mono = '10px ' + css('--mono').split(',')[0].replace(/"/g, '') + ', monospace';
-    var L = 48, Rp = 12, T = 14, B = 28, pw = W - L - Rp, ph = H - T - B;
-    var YMIN = -6, YMAX = 7;
-    var x = function (t) { return L + (t - TMIN) / (TMAX - TMIN) * pw; };
-    var y = function (v) { return T + (YMAX - v) / (YMAX - YMIN) * ph; };
-
-    g.fillStyle = surf; g.fillRect(L, T, pw, ph);
-    g.fillStyle = hot; g.globalAlpha = 0.07;
-    g.fillRect(x(TCROSS), T, x(TMAX) - x(TCROSS), ph); g.globalAlpha = 1;
-
-    g.strokeStyle = rule; g.lineWidth = 1; g.font = mono; g.fillStyle = mute;
-    for (var v = YMIN; v <= YMAX; v += 2) {
-      g.beginPath(); g.moveTo(L, y(v) + .5); g.lineTo(L + pw, y(v) + .5); g.stroke();
-      g.textAlign = 'right'; g.textBaseline = 'middle'; g.fillText('1e' + v, L - 6, y(v));
+    // Uniform scale of the fixed 1280x720 canvas to the viewport.
+    function fit() {
+      var w = (window.innerWidth - 96) / 1280;
+      var h = (window.innerHeight - 140) / 720;
+      var s = Math.max(0.2, Math.min(w, h));
+      document.documentElement.style.setProperty('--s', s);
+      draw();
     }
-    for (var t = 375; t <= TMAX; t += 25) {
-      g.beginPath(); g.moveTo(x(t) + .5, T); g.lineTo(x(t) + .5, T + ph); g.stroke();
-      g.textAlign = 'center'; g.textBaseline = 'top'; g.fillText(t + ' K', x(t), T + ph + 6);
-    }
-    function curve(lnk, E, color) {
-      g.beginPath();
-      for (var i = 0; i <= 400; i++) {
-        var tt = TMIN + (TMAX - TMIN) * i / 400;
-        var vv = Math.max(YMIN, Math.min(YMAX, log10k(lnk, E, tt)));
-        i ? g.lineTo(x(tt), y(vv)) : g.moveTo(x(tt), y(vv));
+
+    // Arrhenius curves computed in-page from the fitted parameters, so the figure can never
+    // drift from artifacts/physics_params.json.
+    var LN_K1 = 2.718739542774161, E1 = 43161.27219874831;
+    var LN_K2 = 0.15940771227404235, E2 = 250072.4920452807;
+    var R = 8.314, TREF = 430, TCROSS = 449.894, TMIN = 360, TMAX = 550;
+
+    function log10k(lnk, E, T) { return (lnk - (E / R) * (1 / T - 1 / TREF)) / Math.LN10; }
+    function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+
+    function draw() {
+      var cv = document.getElementById('arr'); if (!cv) return;
+      var s = parseFloat(css('--s')) || 1;
+      var dpr = (window.devicePixelRatio || 1) * Math.max(1, s);
+      var W = 560, H = 256;
+      cv.width = W * dpr; cv.height = H * dpr;
+      var g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+
+      var ink = css('--ink'), shade = css('--cream-shade'), accent = css('--orange');
+      var face = '"ATW Grotesque", sans-serif';
+      var L = 48, Rp = 22, T = 8, B = 28, pw = W - L - Rp, ph = H - T - B;
+      var YMIN = -6, YMAX = 7;
+      var x = function (t) { return L + (t - TMIN) / (TMAX - TMIN) * pw; };
+      var y = function (v) { return T + (YMAX - v) / (YMAX - YMIN) * ph; };
+
+      // subtle fill marking the region right of the crossover
+      g.fillStyle = shade;
+      g.fillRect(x(TCROSS), T, x(TMAX) - x(TCROSS), ph);
+
+      // gridlines: cream-shade hairlines only, no ink grid
+      g.strokeStyle = shade; g.lineWidth = 1;
+      for (var v = YMIN; v <= YMAX; v += 2) {
+        if (v === YMIN) continue;
+        g.beginPath(); g.moveTo(L, y(v) + .5); g.lineTo(L + pw, y(v) + .5); g.stroke();
       }
-      g.strokeStyle = color; g.lineWidth = 2.2; g.lineJoin = 'round'; g.stroke();
+
+      // axis type
+      g.font = '400 14px ' + face; g.fillStyle = ink;
+      for (var v2 = YMIN; v2 <= YMAX; v2 += 2) {
+        g.textAlign = 'right'; g.textBaseline = 'middle'; g.fillText('1e' + v2, L - 8, y(v2));
+      }
+      for (var t = 375; t <= TMAX; t += 25) {
+        g.textAlign = 'center'; g.textBaseline = 'top'; g.fillText(t + ' K', x(t), T + ph + 8);
+      }
+
+      function curve(lnk, E, color) {
+        g.beginPath();
+        for (var i = 0; i <= 400; i++) {
+          var tt = TMIN + (TMAX - TMIN) * i / 400;
+          var vv = Math.max(YMIN, Math.min(YMAX, log10k(lnk, E, tt)));
+          i ? g.lineTo(x(tt), y(vv)) : g.moveTo(x(tt), y(vv));
+        }
+        g.strokeStyle = color; g.lineWidth = 2; g.lineJoin = 'round'; g.stroke();
+      }
+      curve(LN_K1, E1, ink); curve(LN_K2, E2, accent);
+
+      var yc = y(log10k(LN_K1, E1, TCROSS));
+      g.setLineDash([3, 3]); g.strokeStyle = ink; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(x(TCROSS), T); g.lineTo(x(TCROSS), T + ph); g.stroke();
+      g.setLineDash([]);
+      g.fillStyle = ink; g.beginPath(); g.arc(x(TCROSS), yc, 3.5, 0, Math.PI * 2); g.fill();
+      g.font = '400 14px ' + face;
+      // legend parked in the empty upper-left corner, clear of both curves
+      g.textAlign = 'left'; g.textBaseline = 'top';
+      g.fillText('k₁  A→B   E = 43.16', L + 10, T + 8);
+      g.fillStyle = accent;
+      g.fillText('k₂  B→C   E = 250.07', L + 10, T + 28);
+      // callout tucked above-left of the intersection
+      g.fillStyle = ink; g.textAlign = 'right'; g.textBaseline = 'bottom';
+      g.fillText('k₁ = k₂ at 449.9 K', x(TCROSS) - 10, yc - 14);
+      g.fillText('selectivity collapses →', L + pw - 8, T + ph - 8);
+
+      // ink axes at 1px
+      g.strokeStyle = ink; g.lineWidth = 1;
+      g.beginPath();
+      g.moveTo(L + .5, T); g.lineTo(L + .5, T + ph + .5); g.lineTo(L + pw, T + ph + .5);
+      g.stroke();
     }
-    curve(LN_K1, E1, accent); curve(LN_K2, E2, hot);
 
-    var yc = y(log10k(LN_K1, E1, TCROSS));
-    g.setLineDash([4, 4]); g.strokeStyle = ink; g.lineWidth = 1;
-    g.beginPath(); g.moveTo(x(TCROSS), T); g.lineTo(x(TCROSS), T + ph); g.stroke();
-    g.setLineDash([]);
-    g.fillStyle = ink; g.beginPath(); g.arc(x(TCROSS), yc, 4, 0, Math.PI * 2); g.fill();
-    g.textAlign = 'left'; g.textBaseline = 'bottom';
-    g.fillText('k₁ = k₂ at 449.9 K', x(TCROSS) + 7, T + 12);
-    g.fillStyle = accent; g.textBaseline = 'middle';
-    g.fillText('k₁  A→B   E = 43.16', L + 8, y(log10k(LN_K1, E1, 370)) - 12);
-    g.fillStyle = hot; g.fillText('k₂  B→C   E = 250.07', L + 8, y(-4.6));
-    g.fillStyle = mute; g.textAlign = 'right'; g.textBaseline = 'bottom';
-    g.fillText('selectivity collapses →', L + pw - 6, T + ph - 6);
-    g.strokeStyle = rule; g.strokeRect(L + .5, T + .5, pw, ph);
-  }
+    fit();
+    window.addEventListener('resize', fit);
+    window.addEventListener('beforeprint', function () {
+      document.documentElement.style.setProperty('--s', 1); draw();
+    });
+    window.addEventListener('afterprint', fit);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(draw);
 
-  draw();
-  window.addEventListener('resize', draw);
-  window.addEventListener('beforeprint', draw);
-  var mq = window.matchMedia('(prefers-color-scheme: dark)');
-  (mq.addEventListener ? mq.addEventListener.bind(mq, 'change') : mq.addListener.bind(mq))(draw);
-})();
+  })();
 </script>

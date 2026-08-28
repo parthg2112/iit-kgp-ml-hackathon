@@ -12,3 +12,7 @@ scratch/
 # Obsidian settings in docs/pitch
 docs/pitch/.obsidian/
 
+# Third-party notebooks kept in docs/reference/ for comparison are other people's work.
+# Read them locally; do not redistribute them in this repo.
+docs/reference/*.ipynb
+

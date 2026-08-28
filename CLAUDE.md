@@ -98,7 +98,9 @@ Do not hand-write the CSV.
 claude ke chhatore.csv   THE SUBMISSION — never hand-edit; rebuild via make_submission.py
 notebook/final.ipynb    finalist deliverable; SELF-CONTAINED, no src imports
 data/                   train_dataset.csv, test_dataset.csv  (paths in src/data.py)
-docs/                   problem_statement.pdf, guide.md (team brief — not ground truth)
+docs/reference/         problem_statement.pdf, guide.md (team brief — not ground truth)
+docs/pitch/final/       what is submitted: slides.html/.md, the exported PDFs
+docs/pitch/support/     Q&A depth: deck, appendix, qa_bank, STUDY_GUIDE
 reference/              an external audit's competing predictions, kept for comparison
 artifacts/ figures/     fitted params, CV results, profiles, plots
 ```
@@ -472,7 +474,8 @@ judge whether a proposed improvement is worth the time.
 `scripts/audit_rows.py` records the row-level verdicts against an external audit (rows 0,
 24, 39, 41, 3, 23), each decided on training evidence rather than model preference.
 
-`guide.md` is a team brief, not ground truth — three of its checkable claims are wrong:
+`docs/reference/guide.md` is a team brief, not ground truth — three of its checkable claims
+are wrong:
 it says 18% of rows exceed yield 90 (actually 12%), that test ranges sit inside train
 ranges (flow 79.57 > 79.02, length 2.03 < 2.26), and that ExtraTrees+physics scores 14.02
 (reproduced here at 16.37). Re-verify before quoting it.
@@ -493,7 +496,15 @@ Two interpretation traps worth keeping straight:
 
 ## Rejected mechanisms — do not re-litigate without new evidence
 
-Each was fitted and measured, not argued away:
+Each was fitted and measured, not argued away.
+
+**A caution learned the hard way here.** The free-reaction-orders row below used to read
+"+0.072 worse, one seed −0.189, 10f-CV over 5 seeds" in `appendix.md`, `deck.md`, `deck.html`
+and `qa_bank.md`. **No such measurement exists**: `scripts/profile_orders.py` has no
+cross-validation in it, only train profiles, and no artifact or log holds that result. The
+value `+0.072` appears elsewhere in this file as the *bagging unbiasedness* figure, which is
+the likely source. It has been removed everywhere. Do not reject a mechanism on a
+generalization number without an artifact behind it.
 
 | Hypothesis | Result |
 |---|---|
@@ -502,6 +513,7 @@ Each was fitted and measured, not argued away:
 | Thermally neutral reactions | 8.27 vs 3.66 — clearly worse |
 | Parallel A→C path | **Now measured** (`scripts/pitch_evidence.py`). Fitted with `ln_k3_ref, E3_kJ, a3` free: train 3.6540 vs 3.6559 — 3 extra parameters buy **+0.0019**. 10f-CV over 3 seeds is **6.7103 vs 6.3579, i.e. −0.352 worse**, and unstable (5.41 / 8.13 / 6.59). Rejected on generalization |
 | Axial dispersion (tanks-in-series) | At *fixed* params worth only ~0.08 RMSE. Larger apparent gains came from refitting against the coarse cascade's discretization error — same failure mode as the step-drift bug |
+| **Free reaction orders `n1`, `n2`** | **The one entry here NOT rejected on fit — free orders fit *better*.** `profile_order_n2.json`: train **3.536** at n2 = 1.5 vs **3.6559** first-order; a refit with the E2 box widened reaches 3.504 at n1 = 1.05, n2 = 1.39. Kept first-order on *mechanism*: elementary steps are first-order by construction, and n ≠ 1 puts a `CA0^(n-1)` factor in the mass balance so **inlet concentration stops cancelling** — which would turn our `corr(conc, yield) = +0.009` result and the a1/a2 cancellation from consequences into coincidences. In the n2 = 1.5 profile E2 pins at its 280 bound, so it is not a clean optimum either |
 
 ### Two things the 8-lever sweep turned up that belong in the pitch
 

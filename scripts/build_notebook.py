@@ -1,4 +1,4 @@
-"""Generate notebook/final.ipynb — the documented workflow finalists must submit.
+"""Generate notebook/final.ipynb, the documented workflow finalists must submit.
 
 The notebook must be SELF-CONTAINED: a judge runs the .ipynb, and one that imports
 from src/ will not execute for them. So `embed()` below inlines the *real* source of
@@ -60,45 +60,41 @@ def code(source):
 
 CELLS = [
     md("""
-# Reactor Yield Surrogate — Team *Claude ke Chhatore*
+# Reactor Yield Surrogate
 
-**Predictive Modeling Optimization Challenge**
+### Team *Claude ke Chhatore* · Predictive Modeling Optimization Challenge
 
-We were asked for a fast stand-in for a slow non-isothermal reactor simulation: five
-operating knobs in, yield of product B out. Rather than fit a general-purpose regressor
-to 150 rows, we **recovered the reactor's governing equations** and fitted their seven
-physical parameters.
+**We recovered the reactor's governing equations instead of fitting a general-purpose
+regressor to 150 rows.** Five operating knobs in, yield of product B out.
 
-The result is a model whose parameters are activation energies and heats of reaction —
-quantities a process engineer can check against known kinetics — that also happens to be
+Every fitted parameter is an activation energy, a heat of reaction or a heat-transfer
+coefficient, so a process engineer can check it against known kinetics. The model is also
 about **4.5× more accurate** than the best tree ensemble we could build.
 """),
     md("""
 ## 1. The chemistry, and what makes it hard
 
-Two first-order reactions in series inside a tube:
-
 $$A \\xrightarrow{k_1} B \\xrightarrow{k_2} C$$
 
-B is the product **and** the feedstock for the waste reaction, so it is being created and
-destroyed at the same time. Both rate constants are Arrhenius, so heating accelerates
-both — but not equally. If $E_2 > E_1$, heating accelerates the *destruction* of B faster
-than its formation, and selectivity collapses.
+Two first-order reactions in series. B is the product **and** the feedstock for the waste
+reaction, so it is created and destroyed at once. Both rate constants are Arrhenius, so heat
+accelerates both, but not equally: if $E_2 > E_1$, heating destroys B faster than it forms
+it and selectivity collapses.
 
-Two knobs control the outcome:
+| Knob | Set by |
+|---|---|
+| Temperature | `inlet_temperature_K`, `jacket_temperature_K` |
+| Residence time $\\tau = L/Q$ | `length_m`, `flow_rate_L_min` |
 
-- **Temperature**, set by `inlet_temperature_K` and `jacket_temperature_K`
-- **Residence time** $\\tau = L/Q$, set by `length_m` and `flow_rate_L_min`
-
-This produces a **ridge**: too cold or too fast and A never converts; too hot or too slow
+The result is a **ridge**. Too cold or too fast and A never converts; too hot or too slow
 and B is destroyed. The optimum is a narrow band between the two.
 """),
     md("""
-> **This notebook is self-contained.** The integrator, the parameter fit, the validation and
-> the submission writer are all defined and executed below — nothing essential is imported
-> from a local package, so it runs anywhere the two CSVs and standard scientific Python are
-> present. Cached results are used where a step is slow, and every one is *recomputed and
-> asserted* rather than trusted.
+> **This notebook is self-contained.** The integrator, the fit, the validation and the
+> submission writer are all defined and executed below, with nothing essential imported from a
+> local package, so it runs anywhere the two CSVs and standard scientific Python are present.
+> Cached results are used only where a step is slow, and each one is recomputed and asserted
+> rather than trusted.
 """),
     code("""
 import json
@@ -107,6 +103,12 @@ from dataclasses import dataclass
 
 import numpy as np, pandas as pd
 import matplotlib.pyplot as plt
+
+# One restrained figure style for the whole notebook.
+plt.rcParams.update({"figure.dpi": 110, "axes.grid": True, "grid.alpha": 0.25,
+                     "axes.spines.top": False, "axes.spines.right": False,
+                     "font.size": 10, "axes.titlesize": 11, "axes.titleweight": "bold",
+                     "legend.frameon": False})
 
 # Locate the project regardless of where the notebook is launched from.
 ROOT = next(p for p in [Path.cwd(), *Path.cwd().parents]
@@ -161,7 +163,7 @@ def ode_inputs(df):
     md("""
 ## 2. What the data says before any modelling
 
-Three facts that shaped every decision afterwards.
+Three facts shaped every decision that followed.
 """),
     code("""
 f = add_physics_features(train)
@@ -173,63 +175,114 @@ for c in ["jacket_temperature_K", "inlet_temperature_K", "concentration_mol_L",
     print(f"  corr({c:22s}, yield) = {np.corrcoef(train[c], y)[0,1]:+.3f}")
 print(f"  corr({'log_tau':22s}, yield) = {np.corrcoef(f.log_tau, y)[0,1]:+.3f}")
 """),
-    md("""
-**(a) The target is zero-inflated and bimodal.** A quarter of the rows are *exactly* zero —
-completely dead reactor. This rules out any log or Box–Cox transform of the target, since
-none can represent an exact zero.
+    code("""
+fig, ax = plt.subplots(1, 3, figsize=(14.5, 4.1))
 
-**(b) Temperature dominates, and the sign is negative.** Hotter reactor, lower yield. This
-is direct evidence that $E_2 > E_1$ before we fit anything.
+# (a) the target itself: the exact-zero spike and the second mode at the top
+n_zero = int((y == 0).sum())
+ax[0].hist(y, bins=np.linspace(0, 100, 41), color="#4c72b0",
+           edgecolor="white", linewidth=0.4)
+ax[0].annotate(f"exactly zero\\n{n_zero} rows ({(y == 0).mean():.1%})",
+               xy=(1.5, n_zero), xytext=(22, n_zero * 0.82), color="#c44e52",
+               arrowprops=dict(arrowstyle="->", color="#c44e52", lw=1.2))
+ax[0].set_xlabel("overall_yield (%)"); ax[0].set_ylabel("training rows")
+ax[0].set_title("(a) zero-inflated and bimodal")
 
-**(c) `corr(log_tau, yield) ≈ 0.06` does *not* mean residence time is unimportant.** It is
-the signature of an **interior optimum**: low $\\tau$ leaves A unconverted, high $\\tau$
-destroys B, so both tails are low-yield and the linear correlation cancels. Reading this
-correlation as "residence time doesn't matter" would be exactly backwards — $\\tau$ is the
-single most important derived quantity in the problem.
+# (b) the same six correlations printed above, as a chart
+cols  = ["jacket_temperature_K", "inlet_temperature_K", "length_m",
+         "flow_rate_L_min", "concentration_mol_L"]
+short = ["jacket T (K)", "inlet T (K)", "length (m)",
+         "flow rate (L/min)", "conc (mol/L)", "log tau"]
+r = [np.corrcoef(train[c], y)[0, 1] for c in cols] + [np.corrcoef(f.log_tau, y)[0, 1]]
+o = np.argsort(r)
+ax[1].barh([short[i] for i in o], [r[i] for i in o],
+           color=["#c44e52" if r[i] < 0 else "#55a868" for i in o])
+for i, k in enumerate(o):
+    ax[1].text(r[k] + (0.02 if r[k] >= 0 else -0.02), i, f"{r[k]:+.3f}",
+               va="center", ha="left" if r[k] >= 0 else "right", fontsize=9)
+ax[1].axvline(0, color="k", lw=0.8); ax[1].set_xlim(-0.72, 0.32)
+ax[1].set_xlabel("Pearson r with overall_yield")
+ax[1].set_title("(b) temperature dominates, concentration does not")
+
+# (c) the interior optimum that makes corr(log_tau, yield) vanish. The overlay is a
+# binned median of the plotted points, not a fit.
+s = ax[2].scatter(f.tau, y, c=f.T_avg, cmap="coolwarm", s=26,
+                  edgecolor="k", linewidth=0.3, zorder=2)
+edges = np.quantile(f.log_tau, np.linspace(0, 1, 7))
+mid = [np.exp((edges[i] + edges[i+1]) / 2) for i in range(6)]
+med = [np.median(y[(f.log_tau >= edges[i]) &
+                   (f.log_tau <= edges[i+1] if i == 5 else f.log_tau < edges[i+1])])
+       for i in range(6)]
+ax[2].plot(mid, med, "-o", color="#333333", lw=1.6, ms=4, zorder=3,
+           label="median per tau sextile")
+ax[2].legend(loc="upper left", fontsize=9)
+ax[2].set_xscale("log")
+ax[2].set_xlabel("residence time  tau = L/Q  (m·min/L)")
+ax[2].set_ylabel("overall_yield (%)")
+ax[2].set_title("(c) yield rises then collapses with tau")
+plt.colorbar(s, ax=ax[2], label="mean T (K)")
+
+plt.tight_layout(); plt.show()
 """),
     md("""
-## 3. The model: recover the reactor, don't approximate it
+*Figure 1. (a) a quarter of the rows are exactly zero, which rules out any log target
+transform. (b) jacket temperature is the dominant linear driver while inlet concentration is
+essentially uncorrelated. (c) the binned median of the plotted points rises then collapses:
+this is the interior optimum in residence time, and it is what cancels the linear correlation
+with log tau.*
 
-We integrate the actual governing system along the reactor axis:
+**(a) The target is zero-inflated and bimodal.** A quarter of the rows are *exactly* zero: a
+dead reactor. No log or Box-Cox transform of the target is admissible, since none can
+represent an exact zero.
+
+**(b) Temperature dominates and the sign is negative.** Hotter reactor, lower yield. That is
+direct evidence for $E_2 > E_1$ before anything is fitted.
+
+**(c) `corr(log_tau, yield) ≈ 0.06` does not mean residence time is unimportant.** It is the
+signature of an **interior optimum**: low $\\tau$ leaves A unconverted, high $\\tau$ destroys
+B, so both tails are low-yield and the linear correlation cancels. $\\tau$ is the single
+most important derived quantity in the problem.
+"""),
+    md("""
+## 3. The model: recover the reactor, do not approximate it
+
+We integrate the governing system along the reactor axis:
 
 $$\\frac{dC_A}{dz} = -k_1 C_A, \\qquad
 \\frac{dC_B}{dz} = k_1 C_A - k_2 C_B, \\qquad
 \\frac{dT}{dz} = a_1 k_1 C_A + a_2 k_2 C_B + U\\,(T_{jacket} - T)$$
 
-with $C_A(0)=C_{A0}$, $C_B(0)=0$, $T(0)=T_{inlet}$, integrated to $\\tau = L/Q$, and
-$\\text{yield} = 100\\,C_B(\\tau)/C_{A0}$.
+with $C_A(0)=C_{A0}$, $C_B(0)=0$, $T(0)=T_{inlet}$, integrated to $\\tau = L/Q$; the yield is
+$100\\,C_B(\\tau)/C_{A0}$. Seven fitted parameters:
+$\\ln k_1^{ref}, E_1, \\ln k_2^{ref}, E_2, a_1, a_2, U$.
 
-Seven fitted parameters: $\\ln k_1^{ref}, E_1, \\ln k_2^{ref}, E_2, a_1, a_2, U$.
-
-Three implementation decisions did the real work:
+Three implementation decisions did the real work.
 
 1. **Arrhenius reparameterized about $T_{ref} = 430$ K**, as
    $k = e^{\\ln k_{ref}}\\exp[-\\tfrac{E}{R}(\\tfrac1T - \\tfrac1{T_{ref}})]$. Fitting
-   $\\ln A$ and $E$ directly correlates them at >0.999 and turns the objective into a long
-   narrow valley — the usual reason this fit is reported as "slow to converge".
-2. **All 150 rows integrate simultaneously** under an operator-splitting scheme: rates
-   frozen per substep, the mass balance advanced *analytically* (exact solution of the
-   linear series reaction), the energy balance advanced with the exact linear solution.
-   Both halves are unconditionally stable, so no step size can produce negative
-   concentrations. One 150-row evaluation costs ~22 ms, which is what made multistart
-   global search affordable.
+   $\\ln A$ and $E$ directly correlates them above 0.999 and turns the objective into a long
+   narrow valley, which is the usual reason this fit is reported as slow to converge.
+2. **All 150 rows integrate simultaneously** under operator splitting: rates frozen per
+   substep, the mass balance advanced *analytically* (exact solution of the linear series
+   reaction), the energy balance advanced with the exact linear solution. Both halves are
+   unconditionally stable, so no step size can produce negative concentrations. One 150-row
+   evaluation costs about 22 ms, which is what made global multistart search affordable.
 3. **Parameter sets whose integration has not converged are rejected.** Without this the
-   optimizer minimizes *integration error* rather than data error — an early fit produced
+   optimizer minimizes *integration error* rather than data error: an early fit produced
    parameters whose predictions moved 92 yield-points when the substep count was raised.
 """),
     md("""
 ### 3a. The integrator, in full
 
-This is the complete solver — no library ODE call in the inner loop. It is reproduced here
-verbatim from the module we test against SciPy, so what you read is what produced every
-number below.
+The complete solver, with no library ODE call in the inner loop. It is reproduced verbatim
+from the module we test against SciPy, so what you read is what produced every number below.
 """),
     code(embed(_phys._rate, _phys._series_step, _phys._temperature_step, _phys.integrate)),
     md("""
-### 3b. Does it actually solve the equations?
+### 3b. Does it solve the equations?
 
 A fast custom integrator is worthless if it is wrong. We check it against SciPy's stiff BDF
-solver on sampled rows, at parameter sets spanning slow, balanced, violently fast, and
+solver on sampled rows, at parameter sets spanning slow, balanced, violently fast and
 strongly exothermic regimes.
 """),
     code("""
@@ -263,16 +316,16 @@ for name, xv in {"slow": [-1.0, 70, -2.5, 150, 0, 0, 0.5, 0],
     print(f"  {name:11s} max |ours - SciPy BDF| = {d:.2e}")
 """),
     md("""
-Agreement to ~1e-4 yield-points across every regime, at roughly **22 ms** for all 150 rows.
-That speed is what makes the global multistart search below affordable — a `solve_ivp` call
-per row per residual evaluation would have been about a thousand times slower.
+Agreement to ~1e-4 yield-points in every regime, at roughly **22 ms** for all 150 rows. A
+A `solve_ivp` call per row per residual evaluation would have been about a thousand times
+slower.
 
 ### 3c. The fit
 
-Differential evolution to locate the basin, then Levenberg–Marquardt to polish. Set
-`RUN_FIT = True` to reproduce it from scratch (a few minutes); otherwise the cell loads the
-stored parameters and *verifies they reproduce the reported training error*, so the numbers
-below are never taken on trust.
+Differential evolution to locate the basin, then Levenberg-Marquardt to polish. Set
+`RUN_FIT = True` to reproduce it from scratch (a few minutes). Otherwise the cell loads the
+stored parameters and **verifies they reproduce the reported training error**, so no number
+below is taken on trust.
 """),
     code("""
 RUN_FIT = False          # flip to True to re-run the search end to end
@@ -310,33 +363,39 @@ for k, v in p.as_dict().items():
 print(f"\\n  E2 - E1 = {p.E2_kJ - p.E1_kJ:+.1f} kJ/mol")
 """),
     md("""
-## 4. Validation — how we avoided fooling ourselves on 150 rows
+## 4. Validation: how we avoided fooling ourselves on 150 rows
 
 Every number below is **repeated 10-fold cross-validation across multiple seeds**, with the
 ODE parameters **refit inside each fold**. A single train/test split at n=150 moves by
 several RMSE points with the seed, and we get exactly one submission.
 
-**One caveat we had to catch on ourselves.** Our first cross-validation reported the physics
-model at `± 0.000` across seeds — and a *zero* spread is a red flag, not a triumph. Two
-things caused it: the per-fold refit warm-starts from the full-data optimum, and a numerical
-convergence guard in our residual function was firing throughout that neighbourhood, so the
-folds could not move away from the starting point at all. The folds were therefore not
-independent of the rows they were scored against. We fixed the guard and re-ran the whole
-exercise from a genuinely cold start in section 4b — those are the numbers we stand behind.
+**Protocol names, because these numbers are not comparable to each other.**
 
-**Naming the protocols once, because they are not comparable.** `train` = fit and scored on
-all 150 rows. `10f-CV` = repeated 10-fold, parameters refit per fold. `cold` = folds refit
-by differential evolution from scratch. `LOSO` = the prediction policy chosen on two seeds
-and scored on the third: **LOSO 5.671**, against 6.022 for the policy it replaced, better on
+| Name | What it means |
+|---|---|
+| `train` | fit and scored on all 150 rows |
+| `10f-CV` | repeated 10-fold, parameters refit per fold |
+| `cold` | folds refit by differential evolution from scratch |
+| `LOSO` | prediction policy chosen on two seeds, scored on the third |
+
+The shipped policy scores **LOSO 5.671** against 6.022 for the policy it replaced, better on
 all three held-out seeds.
+
+**One caveat we caught on ourselves.** Our first cross-validation reported the physics model
+at `± 0.000` across seeds, and a zero spread is a red flag rather than a triumph. Two things
+caused it: the per-fold refit warm-starts from the full-data optimum, and a numerical
+convergence guard in our residual function was firing throughout that neighbourhood, so the
+folds could not move away from the starting point at all. They were therefore not independent
+of the rows they were scored against. We fixed the guard and re-ran from a genuinely cold
+start in section 4b.
 
 **LOSO does not price hyper-parameter selection, and we used to claim it did.** All three
 seeds re-partition the *same 150 rows*, so the held-out seed has already seen every row.
 Choosing the blend weight and cutoff on 75 rows and scoring on the other 75 costs **+0.371
-RMSE** against just using the fixed values, and selection loses 200 of 200 replicates; LOSO
+RMSE** against just using fixed values, and selection loses 200 of 200 replicates; LOSO
 prices the same choice at +0.02. So read **5.671 as a lower bound**. The policy itself is
-sound — every search lands at w between 0.85 and 0.89 with cutoff 60, and the full-data
-argmax (0.86, 60) scores 5.6546 against 5.6547 for what ships.
+sound: every search lands at w between 0.85 and 0.89 with cutoff 60, and the full-data argmax
+(0.86, 60) scores 5.6546 against 5.6547 for what ships.
 
 ### 4a. The baseline we had to beat
 """),
@@ -354,7 +413,7 @@ for name, st in sorted(base.items(), key=lambda kv: kv[1]["mean"]):
     md("""
 ### 4b. The honest number: cold-start folds
 
-Here each fold is refit by differential evolution **from scratch**, with no knowledge of the
+Each fold is refit by differential evolution **from scratch**, with no knowledge of the
 full-data solution. These folds are genuinely independent of their held-out rows.
 """),
     code("""
@@ -368,34 +427,31 @@ for k, v in sorted(cold["param_max_pct_shift"].items(), key=lambda kv: -kv[1]):
     print(f"  {k:>10s}  {v:6.1f}%")
 """),
     md("""
-The worst fold is not a search failure — we checked. Re-running it with roughly three times
-the global-search budget reproduced the same optimum to four decimal places, so this is
-genuine parameter identifiability: on 135 rows there exists a distinct parameter basin that
-fits *better* (train 2.56) while generalizing *worse* (held-out 13.05). On the full 150 rows
-that basin is no longer competitive, which is why the final fit does not sit in it.
+**The worst fold is not a search failure.** Re-running it at roughly three times the
+global-search budget reproduced the same optimum to four decimal places. This is genuine
+parameter identifiability: on 135 rows a distinct parameter basin fits *better* (train 2.56)
+while generalizing *worse* (held-out 13.05). On the full 150 rows that basin is not
+competitive, which is why the final fit does not sit in it.
 
-This is the result we would present, and it is more interesting than a clean number.
+**The desired reaction is tightly determined; the waste reaction is not.** $E_1$ and
+$\\ln k_1$ move only a few percent when a tenth of the data is removed. The $k_2$ parameters
+move far more, and that is physically sensible rather than a defect: across the sampled
+conditions $k_2$ is either negligible (cold, short residence) or overwhelming (hot, long
+residence), so few rows sit in the narrow band that would pin its value down. The data
+constrains *that* B is destroyed above roughly 450 K far better than it constrains how fast.
 
-**The kinetics of the *desired* reaction are tightly determined**: $E_1$ and $\\ln k_1$ move
-only a few percent when a tenth of the data is removed. **The waste reaction's parameters
-are much more loosely determined** — and that is physically sensible rather than a defect.
-Across the sampled conditions $k_2$ is either negligible (cold, short residence) or
-overwhelming (hot, long residence); there are relatively few rows in the narrow band where
-its precise value is pinned down. The data constrains *that* B is destroyed above roughly
-450 K far better than it constrains exactly how fast.
-
-Reassuringly, the quantity that actually governs selectivity — the ratio $k_2/k_1$ — is
-stable across folds (0.063–0.079) even where the individual parameters wander. And the
-worst cold fold still lands well inside the tree baseline's error.
+The quantity that actually governs selectivity, the ratio $k_2/k_1$, is stable across folds
+(0.063–0.079) even where the individual parameters wander. And the worst cold fold still
+lands well inside the tree baseline's error.
 
 Honest summary: **train RMSE 3.66** against a measured ExtraTrees baseline of **16.4**, with
-cold held-out folds spanning the range printed above. We report the spread rather than the
+cold held-out folds spanning the range printed above. We report the spread, not the
 flattering single number.
 """),
     md("""
 ### 4c. The blend weight is searched, not assumed
 
-A *fixed* blend ratio is guesswork. We choose the weight by minimizing **out-of-fold** RMSE,
+A fixed blend ratio is guesswork. We choose the weight by minimizing **out-of-fold** RMSE,
 then check the choice is not itself an artifact by leave-one-seed-out: pick the weight on two
 seeds, score it on the third.
 """),
@@ -423,51 +479,46 @@ for i in range(P.shape[0]):
 print(f"\\nmean out-of-sample gain: {np.mean(gains):+.3f} RMSE")
 """),
     md("""
-The gain is consistent across every held-out seed, and the weight sits on a **broad plateau
-rather than a sharp peak** — the gain is 0.281 / 0.279 / 0.271 at w = 0.87 / 0.85 / 0.89,
-falling off only below 0.80. So this is a real improvement, not a weight fitted to noise.
-The shipped value is **w = 0.87**, chosen jointly with σ and the cutoff (section 7).
+The gain is consistent on every held-out seed, and the weight sits on a **broad plateau, not
+a sharp peak**: gain 0.281 / 0.279 / 0.271 at w = 0.87 / 0.85 / 0.89, falling off only below
+0.80. That is a real improvement, not a weight fitted to noise. The shipped value is
+**w = 0.87**, chosen jointly with sigma and the cutoff (section 7).
 
-What is the tree contributing? We tested the obvious explanation — that it corrects local
-bias in the ODE — and it **failed twice, on two different strata**.
+**What is the tree contributing? Not bias correction.** We tested that explanation and it
+failed twice, on two different strata.
 
-Our first test used the mid-range stratum (10 < p ≤ 60): the tree's pull agreed with the
-direction that would reduce error on 22 of 42 rows (52%, p = 0.88). That test was sound in
-method but **wrong in stratum** — the mid-range contributes none of the blend's gain. So we
-re-ran it on the band that carries the entire gain, 0.5 < p ≤ 10: **8 of 13 rows (62%,
-p = 0.58)**, against a pre-registered bar of 11/13. Per individual seed it is 7/12, 9/13 and
-9/14 — no seed clears the bar. The verdict survives being tested where it matters.
+| Sign test | Stratum | Rows aligned | Verdict |
+|---|---|---|---|
+| First test | mid-range, 10 < p ≤ 60 | 22 of 42 (52%, p = 0.88) | sound method, **wrong stratum**: the mid-range carries none of the gain |
+| Decisive | 0.5 < p ≤ 10, where the gain lives | 8 of 13 (62%, p = 0.58) | bar was 11/13; per seed 7/12, 9/13, 9/14, and no seed clears it |
 
-What the tree does have is **decorrelated error** — correlation with the physics model's
+What the tree does have is **decorrelated error**: correlation with the physics model's
 errors is just +0.07. A weak but decorrelated component reduces an ensemble's variance even
-when it is far worse standalone (15.0 vs 6.1 RMSE on these rows). So the honest description
-is *variance reduction*, not bias correction.
+when it is far worse standalone (15.0 vs 6.1 RMSE on these rows). The honest description is
+*variance reduction*.
 
-That is a weaker footing, and it has a measurable price: the blend **introduces bias to buy
-variance**. Pure physics is essentially unbiased on these rows (mean signed error +0.07);
+**That is a weaker footing, and it has a measurable price.** The blend introduces bias to buy
+variance. Pure physics is essentially unbiased on these rows (mean signed error +0.07);
 blending shifts it to +1.15. We take the trade because RMSE still improves 6.14 → 5.81 on
-those rows (5.935 → 5.654 whole-set, per seed), but we state it rather than leave it implicit.
+those rows, and 5.935 → 5.654 whole-set per seed, but we state it rather than leave it
+implicit.
 
-We also tested whether the variance reduction could come from a defensible single-model
-source instead — **bagging the physics fit** over bootstrap resamples. It recovers only +0.13
-of the +0.28 and on one seed is worse than the single fit. The reason is worth more than the
-result — and we got it wrong the first time. We originally blamed the alternative parameter
-basin from section 4b (the one that fits a subset at RMSE 2.56 while scoring 13.05 held out).
-Measured properly, basin membership is set by **which rows are in the fold**, not by the
-resample: 10 of 100 folds sit in the second basin, but only **7 of 2400 replicates** ever
-cross into it. The rejection stands; the mechanism we attached to it did not survive being
-checked. So the second model stays, on measured grounds rather than preference.
+**The principled alternative was tested and rejected.** Bagging the physics fit over
+bootstrap resamples recovers only +0.13 of the +0.28 and on one seed is worse than the single
+fit. We first blamed the alternative parameter basin from section 4b, the one fitting a
+subset at 2.56 while scoring 13.05 held out. Measured properly that explanation was wrong:
+basin membership is set by which rows are in the fold, not by the resample. 10 of 100 folds
+sit in the second basin, but only 7 of 2400 replicates ever cross into it. The rejection
+stands; the mechanism we attached to it did not.
+"""),
+    md("""
+### 4d. A single global weight hides a defect
 
-The weight sits on a broad plateau (gain 0.281 / 0.279 / 0.271 at w = 0.87 / 0.85 / 0.89),
-not a sharp peak — so it is not a tuning artifact.
-
-### 4d. …but a single global weight hides a defect
-
-Breaking the blend's gain down by prediction stratum shows it is not uniform — and it is far
-more concentrated than a global RMSE suggests. Essentially the entire gain comes from **13
-rows** in the 0.5–10 band (+1.74 RMSE there). On the 56 near-zero rows the blend **loses
-1.55**, and at the top a tree cannot extrapolate past its outermost split and can only pull
-predictions toward the training mean. That is what motivates the cutoff rule below.
+Broken down by prediction stratum, the gain is not uniform, and it is far more concentrated
+than a global RMSE suggests. Essentially the whole gain comes from **13 rows** in the 0.5–10
+band (+1.74 RMSE there). On the 56 near-zero rows the blend **loses 1.55**, and at the top a
+tree cannot extrapolate past its outermost split and can only pull predictions toward the
+training mean. That is what motivates the cutoff rule below.
 """),
     code("""
 BLEND_CUTOFF = 60.0     # default; the shipped value is read from blend.json
@@ -500,22 +551,22 @@ for i in range(P.shape[0]):
     md("""
 The rule is one threshold with the weight held at its already-validated value, and it
 improves on **every** held-out seed. We ship the weight and cutoff read from `blend.json`
-above — **0.87 physics + 0.13 ExtraTrees below a predicted yield of 60, pure physics above
-it** — which also restores the top of the prediction range.
+above: **0.87 physics + 0.13 ExtraTrees below a predicted yield of 60, pure physics above
+it**. That also restores the top of the prediction range.
 
-We only found this because we looked at the blend's gain *by regime*. A single global weight
-chosen on aggregate RMSE cannot see harm that is confined to one stratum.
+We found this only by looking at the gain *by regime*. A single global weight chosen on
+aggregate RMSE cannot see harm that is confined to one stratum.
 
-We stopped at one threshold on purpose. Gating the blend from *below* as well (skipping the
-near-zero rows, where it loses 1.55) scores better in-sample — but that number is measured on
+We stopped at one threshold deliberately. Gating the blend from *below* as well, skipping the
+near-zero rows where it loses 1.55, scores better in-sample, but that number is measured on
 the same rows that would select it, and it would be a fourth tuned knob on a model whose
 whole claim is mechanism over fitting. We report it and do not take it.
 
-**Does this generalise to the test set?** The blend region covers 36 of 50 test rows (72%) vs
-98 of 150 train (65%), and the band composition matches closely — near-zero 44% vs 37%,
-0.5–10 8.0% vs 8.7%, mid-range 20% vs 19%. So the gain was measured against a population
-resembling the one we are scored on. (We deliberately do *not* quote a helpful-vs-harmful
-split for the test rows: that requires labels we do not have.)
+**Does this generalise to the test set?** The blend region covers 36 of 50 test rows (72%)
+against 98 of 150 train (65%), and the band composition matches closely: near-zero 44% vs
+37%, the 0.5–10 band 8.0% vs 8.7%, mid-range 20% vs 19%. The gain was measured against a
+population resembling the one we are scored on. We deliberately do not quote a
+helpful-versus-harmful split for the test rows, because that requires labels we do not have.
 """),
     md("""
 ## 5. Model selection: what we tested and rejected
@@ -532,51 +583,50 @@ for name, r in sorted(mc.items(), key=lambda kv: kv[1]["train_rmse"]):
 """),
     md("""
 - **`neutral`** forces both reactions thermally neutral ($a_1=a_2=0$). It is clearly worse,
-  so the heat terms are doing real work.
-- **`flowU`** lets jacket heat transfer scale as $(Q/Q_{ref})^n$ (a Reynolds-number effect).
-  The exponent came back at $n \\approx -0.03$ — inactive. Plain constant-$U$ plug flow is
-  the right form, and we kept the simpler 7-parameter model.
+  so the heat terms do real work.
+- **`flowU`** lets jacket heat transfer scale as $(Q/Q_{ref})^n$, a Reynolds-number effect.
+  The exponent came back at $n \\approx -0.03$, inactive. Constant-$U$ plug flow is the right
+  form, and we kept the simpler 7-parameter model.
 - **Tanks-in-series** tested whether axial dispersion matters. At *fixed* parameters the
-  entire effect is worth ~0.08 RMSE; the larger apparent gain from refitting was the
-  optimizer exploiting the coarse cascade's discretization error, not physics. Rejected.
+  entire effect is worth ~0.08 RMSE; the larger apparent gain on refitting was the optimizer
+  exploiting the coarse cascade's discretization error, not physics. Plug flow holds.
+  **Rejected.**
 - **A parallel $A \\to C$ path.** The problem statement calls the network *"series-parallel"*
   while listing only $A \\to B \\to C$, so we fitted the parallel path rather than assume
   either reading. Adding $\\ln k_{3,ref}$, $E_3$ and $a_3$ buys **+0.0019** train RMSE
   (3.6540 vs 3.6559) for three extra parameters, while 10-fold CV over three seeds gets
-  **worse — 6.7103 vs 6.3579** — and unstable, swinging 5.41 / 8.13 / 6.59. Negligible train
+  **worse, 6.7103 vs 6.3579**, and unstable, swinging 5.41 / 8.13 / 6.59. Negligible train
   gain with degraded generalization is what fitting noise looks like. **Rejected.**
-
-### Tested and priced, not merely skipped
-
-Two mechanisms a chemical engineer would reasonably expect us to include were fitted and
-then rejected — and because we profiled them, "rejected" comes with a number and a physical
-reading rather than a shrug.
+- **Free reaction orders $n_1$, $n_2$.** This is the one entry here that fits *better* and we
+  kept the simpler form anyway. Letting $n_2$ float reaches train **3.536** at $n_2 = 1.5$
+  against **3.656** for first-order. We ship first-order on mechanism, not on fit: elementary
+  steps are first-order in the reacting species by construction, and $n \\neq 1$ puts a
+  $C_{A0}^{\\,n-1}$ factor in the mass balance, so inlet concentration stops cancelling from
+  the yield expression. That would turn the concentration result in section 6, $r = +0.009$,
+  from a consequence of the model into a coincidence. We traded 0.12 RMSE of training fit for
+  a mechanism we can defend. **Not rejected on generalization: we never ran that comparison,
+  and we do not claim it.**
 
 **Flow-dependent heat transfer is absent, and that is a finding about the reactor.** If the
-jacket were tube-side limited, the wall coefficient would follow a Dittus–Boelter-type
+jacket were tube-side limited, the wall coefficient would follow a Dittus-Boelter-type
 correlation, $h \\propto Re^{0.8}$, giving $n \\approx 0.8$ in $U = U_0 (Q/Q_{ref})^n$. The
 profile in section 5b puts $n \\in [-0.2, 0]$ and prices $n = 0.8$ at **+11.40 RMSE**. So the
-controlling thermal resistance is *not* on the process side — it sits in the wall or on the
-jacket side — which is precisely why flow rate enters the model only through residence time.
-
-**Axial dispersion does not help.** A tanks-in-series sweep at fixed parameters is worth
-~0.08 RMSE; the larger gain that appears when parameters are refit is the optimizer
-exploiting the coarse cascade's discretisation error, not physics. Plug flow holds.
+controlling thermal resistance is not on the process side; it sits in the wall or on the
+jacket side, which is why flow rate enters the model only through residence time.
 
 ### Deliberately not attempted
 
 Neural networks (150 rows), XGBoost/LightGBM hyperparameter searches (boosting measured
-*worst* of everything we tried), polynomial feature explosion, and outlier removal — the
+*worst* of everything we tried), polynomial feature explosion, and outlier removal. The
 extreme rows are real physics regimes and carry the location of the yield cliff.
 """),
     md("""
-### 5b. How well is each parameter actually determined?
+### 5b. How well is each parameter determined?
 
 Reporting a parameter without an interval is not a result. For each of the three parameters
 whose value was ever in question, we pinned it across a grid, refit everything else, and
 recorded the resulting training error. The flat bottom of each curve *is* the identifiable
-range — this is a profile likelihood, and it is what "robustness" means for a mechanistic
-model.
+range: this is a profile likelihood, and it is what robustness means for a mechanistic model.
 """),
     code("""
 from scipy.stats import f as f_dist
@@ -605,38 +655,37 @@ for name, label in [("E2_kJ", "E2 (waste-reaction activation energy)"),
     print()
 """),
     md("""
-Three conclusions, each answering a challenge that was actually put to us:
+Three conclusions, each answering a challenge that was actually put to us.
 
 - **E₂ = 250 kJ/mol, 95% CI [234, 270].** An independent reviewer's model reported E₂ ≈ 155.
-  That value sits at RMSE 6.28 — nowhere near the interval — so it is excluded by the data
+  That value sits at RMSE 6.28, nowhere near the interval, so it is excluded by the data
   rather than merely disagreed with.
-- **a₁ = −11.79, 95% CI [−12.12, −11.49].** Setting a₁ = 0 — the "concentration doesn't
-  enter thermally" hypothesis — costs **+4.54 RMSE**. This was proposed to us as a
-  *falsification* test of our concentration mechanism; it confirmed it instead.
+- **a₁ = −11.79, 95% CI [−12.12, −11.49].** Setting a₁ = 0, the "concentration does not enter
+  thermally" hypothesis, costs **+4.54 RMSE**. This was put to us as a *falsification* test
+  of our concentration mechanism; it confirmed the mechanism instead.
 - **n_flow = 0, 95% CI [−0.03, 0.02].** Turbulent internal flow would give h ∝ Re^0.8, i.e.
   n ≈ 0.8, which costs **+11.40 RMSE**. The interval excludes even 0.03, so the controlling
-  thermal resistance is *not* on the process side — it is in the wall or on the jacket side,
-  which is why flow rate enters the model only through residence time.
+  thermal resistance is not on the process side.
 
 **These were replicated blind.** An independent fit using a different integrator
 (`solve_ivp`/LSODA) and a different optimizer, with no access to our code, parameters or
 notes, recovered E₁ = 43.2 (ours 43.16), E₂ = 250.5 (ours 250.07), a₁ = −11.80 (ours
 −11.79), a₂ = +11.32 (ours +11.34), U = 3.255 (ours 3.2552), at train RMSE 3.6554 (ours
-3.6559) — and its own E₂ profile gave 95% [234, 271] against our [234, 270].
+3.6559). Its own E₂ profile gave 95% [234, 271] against our [234, 270].
 
-**Why we ship a single fit rather than an ensemble.** Averaging over parameter uncertainty
-is the right instinct under squared error, so we tested it: eight distinct admissible
-starting vectors (E₂ spanning 210–265) were refit inside a fold, and all eight converged to
-the *same* optimum to within 2e-4. The apparent spread came from pinning during profiling;
-once the pin is released there is a single well-defined optimum. There is no posterior to
-average over — which is itself the robustness claim.
+**Why we ship a single fit rather than an ensemble.** Averaging over parameter uncertainty is
+the right instinct under squared error, so we tested it: eight distinct admissible starting
+vectors (E₂ spanning 210–265) were refit inside a fold, and all eight converged to the *same*
+optimum to within 2e-4. The apparent spread came from pinning during profiling; once the pin
+is released there is a single well-defined optimum. There is no posterior to average over,
+which is itself the robustness claim.
 """),
     md("""
 ## 6. What the recovered parameters mean
 
 This is the part a feature-importance bar chart cannot give you.
 
-### 6a. The crossover temperature, and why it is the operating limit
+### 6a. The crossover temperature is the operating limit
 """),
     code("""
 T = np.linspace(340, 560, 2000)
@@ -650,32 +699,34 @@ ax[0].semilogy(T, k1, label=f"k1 (A→B), E1 = {p.E1_kJ:.0f} kJ/mol")
 ax[0].semilogy(T, k2, label=f"k2 (B→C), E2 = {p.E2_kJ:.0f} kJ/mol")
 ax[0].axvline(cross, color="r", ls="--", lw=1, label=f"k1 = k2 at {cross:.0f} K")
 ax[0].set_xlabel("temperature (K)"); ax[0].set_ylabel("rate constant")
-ax[0].set_title("Recovered kinetics"); ax[0].legend()
+ax[0].set_title("recovered kinetics"); ax[0].legend()
 
 s = ax[1].scatter(y, pred_train, c=add_physics_features(train)["T_avg"],
                   cmap="coolwarm", s=26, edgecolor="k", linewidth=0.3)
 ax[1].plot([0, 100], [0, 100], "k--", lw=1)
 ax[1].set_xlabel("true yield (%)"); ax[1].set_ylabel("predicted (%)")
-ax[1].set_title(f"Parity — train RMSE {rmse(y, pred_train):.2f}")
+ax[1].set_title(f"parity, train RMSE {rmse(y, pred_train):.2f}")
 plt.colorbar(s, ax=ax[1], label="mean T (K)")
 plt.tight_layout(); plt.show()
 
 print(f"k1 = k2 at approximately {cross:.0f} K")
 """),
     md("""
-**The single most useful number we recovered is the crossover temperature.** Below it,
-$k_1 > k_2$ and the reactor makes B faster than it destroys it. Above it, the ordering
-flips and the reactor is destroying product faster than it forms it. That is a
-directly actionable operating limit, expressed in kelvin.
+*Figure 2. Left: the two fitted Arrhenius curves cross at the temperature where destruction of
+B overtakes its formation. Right: training parity, coloured by mean temperature.*
 
-**Why inlet concentration has almost no effect** (correlation +0.009). The usual answer is
-"both reactions are first order, so $C_{A0}$ cancels". That is only half right: $C_{A0}$
-cancels from the *isothermal* yield expression, but in the energy balance above, a richer
-feed releases more reaction heat, runs hotter, and *should* change yield through the
-thermal path.
+**The crossover temperature is the single most useful number we recovered.** Below it
+$k_1 > k_2$ and the reactor makes B faster than it destroys it. Above it the ordering flips
+and the reactor destroys product faster than it forms it. That is a directly actionable
+operating limit, expressed in kelvin.
 
-Our fit resolves this properly. We fitted the thermally-neutral model explicitly and it was
-clearly worse, so the heat terms are real — but $a_1$ and $a_2$ came back with **opposite
+**Why inlet concentration barely matters** (correlation +0.009). The usual answer is "both
+reactions are first order, so $C_{A0}$ cancels". That is half right: $C_{A0}$ cancels from
+the *isothermal* yield expression, but in the energy balance above, a richer feed releases
+more reaction heat, runs hotter, and should change yield through the thermal path.
+
+Our fit resolves it. The thermally-neutral model was fitted explicitly and is
+clearly worse, so the heat terms are real, but $a_1$ and $a_2$ came back with **opposite
 signs and near-equal magnitude**. The first reaction's heat effect is very nearly cancelled
 by the second's, so the net thermal contribution of concentration is small even though
 neither term is individually negligible.
@@ -687,13 +738,13 @@ print(f"at mean CA0 = {ca0:.2f} mol/L, adiabatic swings: {p.a1*ca0:+.0f} K then 
 print(f"net: {(p.a1 + p.a2)*ca0:+.1f} K  <- the near-cancellation")
 """),
     md("""
-### 6b. Where the remaining error actually lives
+### 6b. Where the remaining error lives
 
 #### 6b-i. It is concentrated, not spread
 
 Aggregate RMSE hides the structure of the problem. Grouping rows by how much the *training
-data itself* disagrees locally — the spread of yields among each row's six nearest
-neighbours in (log τ, T_in, T_jacket) — shows the error is almost entirely confined to the
+data itself* disagrees locally, using the spread of yields among each row's six nearest
+neighbours in (log τ, T_in, T_jacket), shows the error is almost entirely confined to the
 cliff.
 """),
     code("""
@@ -714,25 +765,58 @@ m = spread >= 80
 print(f"\\n{m.sum()}/{len(train)} rows ({m.mean():.0%}) carry {100*err2[m].sum()/err2.sum():.0f}% "
       f"of all squared error")
 """),
+    code("""
+labels, counts, band_rmse, share = [], [], [], []
+for lo, hi in [(0, 20), (20, 50), (50, 80), (80, 101)]:
+    mk = (spread >= lo) & (spread < hi)
+    if not mk.sum():
+        continue
+    labels.append(f"{lo}-{hi}")
+    counts.append(int(mk.sum()))
+    band_rmse.append(float(np.sqrt(err2[mk].mean())))
+    share.append(float(100 * err2[mk].sum() / err2.sum()))
+
+fig, ax = plt.subplots(1, 2, figsize=(11, 3.9))
+ax[0].bar(labels, share, color="#c44e52")
+for i, (v, nr) in enumerate(zip(share, counts)):
+    ax[0].text(i, v + 2, f"{v:.1f}%\\nn={nr}", ha="center", fontsize=9)
+ax[0].set_ylim(0, 108)
+ax[0].set_ylabel("% of total squared error")
+ax[0].set_xlabel("spread of yield among the 6 nearest neighbours")
+ax[0].set_title("(a) share of the squared error")
+
+ax[1].bar(labels, band_rmse, color="#4c72b0")
+for i, v in enumerate(band_rmse):
+    ax[1].text(i, v + 0.25, f"{v:.2f}", ha="center", fontsize=9)
+ax[1].set_ylabel("out-of-fold RMSE")
+ax[1].set_xlabel("spread of yield among the 6 nearest neighbours")
+ax[1].set_title("(b) out-of-fold RMSE by band")
+
+plt.tight_layout(); plt.show()
+"""),
     md("""
+*Figure 3. Rows whose local neighbourhood already disagrees carry almost all of the error;
+the settled majority is predicted almost exactly.*
+
 **29% of rows carry 91% of the squared error**, while the settled rows sit at an RMSE of
-0.65. This is the honest statement of what our score depends on: not the model's average
+0.65. That is the honest statement of what our score depends on: not the model's average
 quality, but how a minority of cliff-edge rows happen to fall.
 
-The same concentration shows up when we slice by predicted yield instead of by neighbourhood
+The same concentration appears when we slice by predicted yield instead of by neighbourhood
 spread. In the 0.5–10% band the ODE **misses low**: band RMSE 11.26 against 5.64 overall,
-with 8 of 13 rows under-predicted. But the shape of that miss matters, and it is easy to
-overstate — the **mean** shortfall is +4.34 while the **median** is only +1.05. It is not a
-uniform four-point offset; it is a handful of badly-missed rows, which is the 29/91
-decomposition appearing again rather than a separate systematic bias. This is a genuine
-locality where our model is weakest, and it is where the blend of section 4 earns its keep.
+with 8 of 13 rows under-predicted. The shape of that miss is easy to overstate. The **mean**
+shortfall is +4.34 while the **median** is only +1.05, so it is not a uniform four-point
+offset but a handful of badly-missed rows, which is the 29/91 decomposition appearing again
+rather than a separate systematic bias. This is where our model is weakest, and where the
+blend of section 4 earns its keep.
+"""),
+    md("""
+#### 6b-ii. That remaining error is input noise, not missing physics
 
-#### 6b-ii. And that remaining error is input noise, not missing physics
-
-The obvious reading of a 3.66 plateau is "there is physics we have not found". We tested
-that and it is wrong. Grouping rows by how sensitive the predicted yield is to temperature —
-|dYield/dT|, obtained by perturbing both temperatures ±1 K — the error tracks sensitivity
-almost perfectly, and the implied temperature error is consistent at roughly 2 K.
+The obvious reading of a 3.66 plateau is "there is physics we have not found". We tested that
+and it is wrong. Grouping rows by how sensitive the predicted yield is to temperature, using
+|dYield/dT| obtained by perturbing both temperatures ±1 K, the error tracks sensitivity
+almost perfectly and the implied temperature error is consistent at roughly 2 K.
 """),
     code("""
 hi_t, lo_t = train.copy(), train.copy()
@@ -766,47 +850,44 @@ print(f"  RMSE it would produce  {np.sqrt((sim_spread**2).mean()):.3f}")
 print(f"  our actual residual    {np.sqrt((resid**2).mean()):.3f}   <- noise model slightly OVERSHOOTS")
 """),
     md("""
-Three things follow:
+Three things follow.
 
-1. The least-sensitive fifth of the data sits at RMSE **0.20**; the most sensitive at
-   **7.39**. That rules out noise on the *output* — but it does **not** by itself separate
-   input noise from a small error in the temperature channel, since a slightly wrong E₂
-   would produce the same signature.
+1. The least-sensitive fifth of the data sits at RMSE **0.20**, the most sensitive at
+   **7.39**. That rules out noise on the *output*, but it does not by itself separate input
+   noise from a small error in the temperature channel, since a slightly wrong E₂ would
+   produce the same signature.
 2. A scan of ~100 feature terms and pairwise products finds no residual structure at all
    (largest |r| = 0.14), and solving for the per-row temperature offset that reproduces each
-   observation exactly gives a **median of 1.67 K** with no structure either.
-3. Decisively: **averaging the model over that noise improves held-out error while making
-   the training fit worse** (next section). Blurring a correct model with clean inputs would
-   hurt cross-validation, not help it.
+   observation exactly gives a **median of 1.67 K**, also with no structure.
+3. Decisively: **averaging the model over that noise improves held-out error while making the
+   training fit worse**. Blurring a correct model with clean inputs would hurt
+   cross-validation, not help it.
 
 *What does not fit:* the fitted offsets have a heavy tail (99th percentile 22 K) and 12 of
-150 rows cannot be reproduced by any offset within ±25 K. So a minority of rows carry
-something that is not temperature noise — we do not claim the cross-validated error is
-irreducible.
+150 rows cannot be reproduced by any offset within ±25 K. A minority of rows carry something
+that is not temperature noise, so we do not claim the cross-validated error is irreducible.
 
-We deliberately do **not** cite "the residuals are unbiased" as evidence. Least squares
-forces the residual orthogonal to ∂f/∂θ, so a small mean residual is a property of the
-optimizer, not a finding about noise.
+We deliberately do **not** cite "the residuals are unbiased" as evidence. Least squares forces
+the residual orthogonal to ∂f/∂θ, so a small mean residual is a property of the optimizer,
+not a finding about noise.
 """),
     md("""
-#### 6b-ii-b. What noise-averaging costs, stated plainly
+#### 6b-ii-b. What noise-averaging costs
 
 Averaging over the input distribution is not free. It slightly worsens one boundary: the edge
 of the dead regime, where a row sitting just off zero gets lifted. The worst case in our
-out-of-fold predictions is **training row 97 — true 0.282, raw model 0.000, smoothed 2.549.**
+out-of-fold predictions is **training row 97, true 0.282, raw model 0.000, smoothed 2.549.**
 
 That row is worth looking at rather than burying, because it is the *right* kind of failure.
-Interior dead-regime rows are exactly 0.000 — all 15 training rows with jacket > 520 K and
-τ > 0.2 are exact zeros. A truth of 0.282 means row 97 is an **edge** row, not an interior
-one, so the model is correctly expressing uncertainty about where the cliff falls and has
-simply overshot on this instance.
+Interior dead-regime rows are exactly 0.000: all 15 training rows with jacket > 520 K and
+τ > 0.2 are exact zeros. A truth of 0.282 makes row 97 an **edge** row, so the model is
+correctly expressing uncertainty about where the cliff falls and has simply overshot here.
 
 The trade is roughly **5 squared-error units lost against 616 recovered**. We did not add a
 dead-regime guard to suppress it: that would be a third tuned rule bolted onto a mechanism
-that is already physically justified, and we have spent this project removing exactly that
-pattern.
+that is already physically justified.
 
-#### 6b-iii. So how much of the final score is luck?
+#### 6b-iii. How much of the final score is luck?
 
 Bootstrapping 50-row draws from our out-of-fold predictions gives the distribution of scores
 a 50-row test set could hand us: median **5.57**, 5th–95th percentile **[2.41, 9.07]**. Any
@@ -816,18 +897,18 @@ single-digit gap between well-built models on 50 rows is mostly sampling.
 ### 6c. An independent audit, and how we settled it
 
 An external reviewer fit their own physics model and disputed five of our test predictions.
-Rather than split the difference, we decided each against the training data.
+We decided each against the training data rather than splitting the difference.
 
 | Row | Their value | Ours | What settled it |
 |---|---|---|---|
 | 39, 41 | ~16 | **~0** | *All 15* training rows with jacket > 520 K and τ > 0.2 have yield ≈ 0 (max 0.297) |
 | 0 | 27.6 | **~68** | In the regime where our model says CA₀ raises yield, corr(CA₀, truth) = **+0.565** (+0.485 partial, controlling for τ and both temperatures); high-CA₀ rows there average 76.1 vs 31.0 for low-CA₀ |
-| 24 | 31.2 | **49.4** | Genuinely ambiguous — neighbours sit at 0.1 and 75.0. A hedge is correct |
+| 24 | 31.2 | **49.4** | Genuinely ambiguous: neighbours sit at 0.1 and 75.0, so a hedge is correct |
 | 3, 23 | "compressed" | **83.5, 84.6** | Their jackets run 32–53 K *below* inlet, so the fluid is chilled to ~353 K and A never fully converts. Every training row above 99 has a *heating* jacket |
 
-The row-0 disagreement has an exact explanation: **at a₁ = 0 our model predicts 28.6 for
-that row** — essentially their 27.6. Their fit had effectively no thermal-concentration
-coupling, a setting our profile rejects at +4.54 RMSE.
+The row-0 disagreement has an exact explanation: **at a₁ = 0 our model predicts 28.6 for that
+row**, essentially their 27.6. Their fit had effectively no thermal-concentration coupling, a
+setting our profile rejects at +4.54 RMSE.
 
 Two of their criticisms did land, and both are fixed: the tree component was shrinking our
 top-end predictions (section 4d), and our first cross-validation was frozen by a numerical
@@ -836,8 +917,8 @@ guard (section 4).
 ## 7. Predictions and submission
 
 Contract: exactly 50 rows in `test_dataset.csv` order, one column headed `overall_yield`,
-floats to ≥3 decimals, all within [0, 100], no index column. `write_submission` asserts
-every one of these and re-reads the file to re-validate.
+floats to ≥3 decimals, all within [0, 100], no index column. `write_submission` asserts every
+one of these and re-reads the file to re-validate.
 """),
     code("""
 from sklearn.ensemble import ExtraTreesRegressor
@@ -893,14 +974,14 @@ print(f"  range [{final.min():.3f}, {final.max():.3f}], mean {final.mean():.3f}"
 pd.read_csv(path).head()
 """),
     md("""
-## 8. Robustness, extrapolation, and scaling
+## 8. Robustness, extrapolation and scaling
 
 **The test set leaves the training envelope, and that decides the model choice.** Test flow
 reaches 79.57 L/min against a training maximum of 79.02, and test length drops to 2.03 m
-against a training minimum of 2.26. The excursions are small, but they are real — and a
-tree ensemble *cannot* extrapolate past its outermost split: it returns the boundary leaf
-value and silently flattens. A mechanistic model has no such boundary. It extrapolates on
-the governing equations, which continue to hold outside the sampled range.
+against a training minimum of 2.26. The excursions are small but real, and a tree ensemble
+*cannot* extrapolate past its outermost split: it returns the boundary leaf value and
+silently flattens. A mechanistic model has no such boundary. It extrapolates on the governing
+equations, which continue to hold outside the sampled range.
 """),
     code("""
 for c in ["flow_rate_L_min", "length_m", "concentration_mol_L",
@@ -912,22 +993,22 @@ for c in ["flow_rate_L_min", "length_m", "concentration_mol_L",
           f"   test [{test[c].min():7.2f}, {test[c].max():7.2f}]{flag}")
 """),
     md("""
-**Overfitting control.** The defence against 150 rows is not regularization strength — it
-is that the model has only **7 free parameters and a fixed functional form**. A tree
-ensemble has thousands of effective degrees of freedom and must discover the ratio $L/Q$
-and the Arrhenius form from data; ours has them built in. That is why the physics model's
+**Overfitting control.** The defence against 150 rows is not regularization strength; it is
+that the model has only **7 free parameters and a fixed functional form**. A tree ensemble
+has thousands of effective degrees of freedom and must discover the ratio $L/Q$ and the
+Arrhenius form from data. Ours has them built in, which is why the physics model's
 cross-validated error sits essentially on top of its training error while the tree's does
 not.
 
 **Speed, measured.** All 150 training conditions integrate in **24.8 ms** at 512 substeps
 (102 ms at the 2048 substeps used for the submission), against **5573 ms** for a SciPy BDF
-solve of the same system — a **225x** speed-up, with the two agreeing to 0.017 yield-points.
+solve of the same system: a **225x** speed-up, with the two agreeing to 0.017 yield-points.
 
-We deliberately do *not* quote a runtime for the original simulation: the problem statement
+We deliberately do *not* quote a runtime for the original simulation. The problem statement
 describes it only as *"computationally expensive and too slow for real-time plant
 optimization"* and never publishes a number, so our comparison is against a reference solver
 we timed ourselves. Either way the surrogate is comfortably inside a real-time control loop,
-which is what it was wanted for. And because the parameters are physical, an engineer can
+which is what it was wanted for. Because the parameters are physical, an engineer can
 sanity-check them against known kinetics instead of trusting a black box.
 """),
 ]

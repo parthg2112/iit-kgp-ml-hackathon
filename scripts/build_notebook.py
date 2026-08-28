@@ -70,6 +70,22 @@ regressor to 150 rows.** Five operating knobs in, yield of product B out.
 Every fitted parameter is an activation energy, a heat of reaction or a heat-transfer
 coefficient, so a process engineer can check it against known kinetics. The model is also
 about **4.5× more accurate** than the best tree ensemble we could build.
+
+**Where to find each thing.**
+
+| What you are looking for | Section |
+|---|---|
+| The chemistry, and why yield is zero-inflated | 1, 2 |
+| The model, the integrator, and the fit | 3 |
+| Validation protocol and the honest generalization number | 4 |
+| What we tested and rejected, and parameter identifiability | 5 |
+| What the parameters mean physically, and where the error lives | 6 |
+| Predictions and the submission contract | 7 |
+| Robustness, extrapolation and scaling | 8 |
+
+Six figures, numbered in order: the target and its correlations (1), fit residuals (2), the
+blend-weight plateau (3), recovered kinetics and parity (4), input sensitivity (5), and where
+the error is concentrated (6).
 """),
     md("""
 ## 1. The chemistry, and what makes it hard
@@ -261,7 +277,7 @@ Three implementation decisions did the real work.
 1. **Arrhenius reparameterized about $T_{ref} = 430$ K**, as
    $k = e^{\\ln k_{ref}}\\exp[-\\tfrac{E}{R}(\\tfrac1T - \\tfrac1{T_{ref}})]$. Fitting
    $\\ln A$ and $E$ directly correlates them above 0.999 and turns the objective into a long
-   narrow valley, which is the usual reason this fit is reported as slow to converge.
+   narrow valley, the usual reason this fit is reported as slow to converge.
 2. **All 150 rows integrate simultaneously** under operator splitting: rates frozen per
    substep, the mass balance advanced *analytically* (exact solution of the linear series
    reaction), the energy balance advanced with the exact linear solution. Both halves are
@@ -362,12 +378,39 @@ for k, v in p.as_dict().items():
     print(f"  {k:>10s} = {v:12.4f}")
 print(f"\\n  E2 - E1 = {p.E2_kJ - p.E1_kJ:+.1f} kJ/mol")
 """),
+    code("""
+# Parity shows how far the fit misses; this shows *where*, which is what tells us whether the
+# error is structure we have not modelled or a handful of cliff rows.
+resid_fit = pred_train - y
+
+fig, ax = plt.subplots(1, 2, figsize=(11.5, 3.5))
+for a in ax:
+    a.axhline(0, color="k", lw=0.8)
+ax[0].scatter(pred_train, resid_fit, s=22, color="#4c72b0", edgecolor="k", linewidth=0.3)
+ax[0].set_xlabel("predicted yield (%)")
+ax[0].set_ylabel("residual (predicted - actual)")
+ax[0].set_title("(a) residual against prediction")
+
+ax[1].scatter(f.T_avg, resid_fit, s=22, color="#c44e52", edgecolor="k", linewidth=0.3)
+ax[1].set_xlabel("mean temperature T_avg (K)")
+ax[1].set_ylabel("residual (predicted - actual)")
+ax[1].set_title("(b) residual against temperature")
+plt.tight_layout(); plt.show()
+
+big = np.abs(resid_fit) > 5
+print(f"{int(big.sum())} of {len(y)} rows miss by more than 5 yield-points, and they carry "
+      f"{100*(resid_fit[big]**2).sum()/(resid_fit**2).sum():.0f}% of the squared error")
+"""),
     md("""
+*Figure 2. The residual is flat and near zero across most of the range and breaks out only in
+a narrow band, so the error is concentrated in a few rows rather than spread as unmodelled
+structure.*
+
 ## 4. Validation: how we avoided fooling ourselves on 150 rows
 
 Every number below is **repeated 10-fold cross-validation across multiple seeds**, with the
-ODE parameters **refit inside each fold**. A single train/test split at n=150 moves by
-several RMSE points with the seed, and we get exactly one submission.
+ODE parameters **refit inside each fold**. A single split at n=150 moves by several RMSE
+points with the seed, and we get one submission.
 
 **Protocol names, because these numbers are not comparable to each other.**
 
@@ -382,20 +425,18 @@ The shipped policy scores **LOSO 5.671** against 6.022 for the policy it replace
 all three held-out seeds.
 
 **One caveat we caught on ourselves.** Our first cross-validation reported the physics model
-at `± 0.000` across seeds, and a zero spread is a red flag rather than a triumph. Two things
-caused it: the per-fold refit warm-starts from the full-data optimum, and a numerical
-convergence guard in our residual function was firing throughout that neighbourhood, so the
-folds could not move away from the starting point at all. They were therefore not independent
-of the rows they were scored against. We fixed the guard and re-ran from a genuinely cold
-start in section 4b.
+at `± 0.000` across seeds, and a zero spread is a red flag, not a triumph. Two causes: the
+per-fold refit warm-starts from the full-data optimum, and a convergence guard was firing
+throughout that neighbourhood, so the folds could not move at all. They were not independent
+of the rows scoring them. We fixed the guard and re-ran cold in section 4b.
 
 **LOSO does not price hyper-parameter selection, and we used to claim it did.** All three
 seeds re-partition the *same 150 rows*, so the held-out seed has already seen every row.
 Choosing the blend weight and cutoff on 75 rows and scoring on the other 75 costs **+0.371
-RMSE** against just using fixed values, and selection loses 200 of 200 replicates; LOSO
-prices the same choice at +0.02. So read **5.671 as a lower bound**. The policy itself is
-sound: every search lands at w between 0.85 and 0.89 with cutoff 60, and the full-data argmax
-(0.86, 60) scores 5.6546 against 5.6547 for what ships.
+RMSE** against fixed values, and selection loses 200 of 200 replicates; LOSO prices the same
+choice at +0.02. Read **5.671 as a lower bound**. The policy is sound: every search lands at
+w between 0.85 and 0.89 with cutoff 60, and the full-data argmax (0.86, 60) scores 5.6546
+against 5.6547 for what ships.
 
 ### 4a. The baseline we had to beat
 """),
@@ -435,18 +476,15 @@ competitive, which is why the final fit does not sit in it.
 
 **The desired reaction is tightly determined; the waste reaction is not.** $E_1$ and
 $\\ln k_1$ move only a few percent when a tenth of the data is removed. The $k_2$ parameters
-move far more, and that is physically sensible rather than a defect: across the sampled
-conditions $k_2$ is either negligible (cold, short residence) or overwhelming (hot, long
-residence), so few rows sit in the narrow band that would pin its value down. The data
-constrains *that* B is destroyed above roughly 450 K far better than it constrains how fast.
+move far more, which is physically sensible: across the sampled conditions $k_2$ is either
+negligible (cold, short residence) or overwhelming (hot, long residence), so few rows sit in
+the narrow band that would pin it down. The data constrains *that* B is destroyed above
+roughly 450 K far better than how fast.
 
-The quantity that actually governs selectivity, the ratio $k_2/k_1$, is stable across folds
-(0.063–0.079) even where the individual parameters wander. And the worst cold fold still
-lands well inside the tree baseline's error.
-
-Honest summary: **train RMSE 3.66** against a measured ExtraTrees baseline of **16.4**, with
-cold held-out folds spanning the range printed above. We report the spread, not the
-flattering single number.
+The ratio that actually governs selectivity, $k_2/k_1$, is stable across folds (0.063–0.079)
+even where the individual parameters wander, and the worst cold fold still lands well inside
+the tree baseline's error: **train RMSE 3.66** against a measured ExtraTrees **16.4**. We
+report the spread, not the flattering single number.
 """),
     md("""
 ### 4c. The blend weight is searched, not assumed
@@ -481,35 +519,30 @@ print(f"\\nmean out-of-sample gain: {np.mean(gains):+.3f} RMSE")
     md("""
 The gain is consistent on every held-out seed, and the weight sits on a **broad plateau, not
 a sharp peak**: gain 0.281 / 0.279 / 0.271 at w = 0.87 / 0.85 / 0.89, falling off only below
-0.80. That is a real improvement, not a weight fitted to noise. The shipped value is
-**w = 0.87**, chosen jointly with sigma and the cutoff (section 7).
+0.80. The shipped value is **w = 0.87**, chosen jointly with sigma and the cutoff (section 7).
 
-**What is the tree contributing? Not bias correction.** We tested that explanation and it
-failed twice, on two different strata.
+**What is the tree contributing? Not bias correction.** We tested that twice, on two strata.
 
 | Sign test | Stratum | Rows aligned | Verdict |
 |---|---|---|---|
 | First test | mid-range, 10 < p ≤ 60 | 22 of 42 (52%, p = 0.88) | sound method, **wrong stratum**: the mid-range carries none of the gain |
 | Decisive | 0.5 < p ≤ 10, where the gain lives | 8 of 13 (62%, p = 0.58) | bar was 11/13; per seed 7/12, 9/13, 9/14, and no seed clears it |
 
-What the tree does have is **decorrelated error**: correlation with the physics model's
-errors is just +0.07. A weak but decorrelated component reduces an ensemble's variance even
-when it is far worse standalone (15.0 vs 6.1 RMSE on these rows). The honest description is
-*variance reduction*.
+What the tree has is **decorrelated error**: correlation with the physics errors is just
++0.07. A weak but decorrelated component reduces ensemble variance even when far worse
+standalone (15.0 vs 6.1 RMSE on these rows). The honest description is *variance reduction*.
 
-**That is a weaker footing, and it has a measurable price.** The blend introduces bias to buy
-variance. Pure physics is essentially unbiased on these rows (mean signed error +0.07);
-blending shifts it to +1.15. We take the trade because RMSE still improves 6.14 → 5.81 on
-those rows, and 5.935 → 5.654 whole-set per seed, but we state it rather than leave it
-implicit.
+**That footing is weaker, and it has a price.** The blend buys variance with bias. Pure
+physics is essentially unbiased on these rows (mean signed error +0.07); blending shifts it to
++1.15. We take the trade because RMSE still improves 6.14 → 5.81 on those rows and
+5.935 → 5.654 whole-set per seed, but we state it rather than leave it implicit.
 
-**The principled alternative was tested and rejected.** Bagging the physics fit over
-bootstrap resamples recovers only +0.13 of the +0.28 and on one seed is worse than the single
-fit. We first blamed the alternative parameter basin from section 4b, the one fitting a
-subset at 2.56 while scoring 13.05 held out. Measured properly that explanation was wrong:
-basin membership is set by which rows are in the fold, not by the resample. 10 of 100 folds
-sit in the second basin, but only 7 of 2400 replicates ever cross into it. The rejection
-stands; the mechanism we attached to it did not.
+**The principled alternative was tested and rejected.** Bagging the physics fit recovers only
++0.13 of the +0.28 and on one seed is worse than the single fit. We first blamed the
+alternative basin from section 4b, the one fitting a subset at 2.56 while scoring 13.05 held
+out. That was wrong: basin membership is set by which rows are in the fold, not by the
+resample. 10 of 100 folds sit in the second basin, but only 7 of 2400 replicates cross into
+it. The rejection stands; the mechanism we attached to it did not.
 """),
     md("""
 ### 4d. A single global weight hides a defect
@@ -548,7 +581,39 @@ for i in range(P.shape[0]):
     print(f"  seed {i}: flat {rmse(y, fi):.4f} -> regime-aware {rmse(y, ri):.4f}  "
           f"gain {rmse(y, fi) - rmse(y, ri):+.4f}")
 """),
+    code("""
+# Draw the plateau instead of asserting it. Rescoring fixed out-of-fold predictions at a new
+# weight is arithmetic, not a refit. Both curves are shown because they answer different
+# questions, and only the regime-aware one describes the policy we actually ship.
+w_grid = np.linspace(0.5, 1.0, 501)
+s_flat = np.array([rmse(y, np.clip(wi*p_oof + (1-wi)*t_oof, 0, 100)) for wi in w_grid])
+s_reg = np.array([rmse(y, apply_blend(p_oof, t_oof, wi, blend["cutoff"])) for wi in w_grid])
+band = w_grid[s_reg <= s_reg.min() + 0.02]
+
+fig, ax = plt.subplots(figsize=(7.4, 3.5))
+ax.axvspan(band.min(), band.max(), color="#4c72b0", alpha=0.12,
+           label="regime-aware, within 0.02 of its optimum")
+ax.plot(w_grid, s_reg, color="#4c72b0", lw=1.8, label="regime-aware (shipped policy)")
+ax.plot(w_grid, s_flat, color="#8c8c8c", lw=1.4, ls="-.", label="flat blend, every row")
+ax.axvline(w, color="#c44e52", ls="--", lw=1.2, label=f"shipped w = {w:.2f}")
+ax.set_xlabel("blend weight w on the physics prediction")
+ax.set_ylabel("pooled out-of-fold RMSE")
+ax.set_title("the shipped weight sits on a plateau of the policy it belongs to")
+ax.legend(fontsize=8.5, loc="upper center")
+plt.tight_layout(); plt.show()
+
+print(f"regime-aware: optimum at w={w_grid[s_reg.argmin()]:.3f}, "
+      f"shipped w={w:.2f} costs {s_reg[np.argmin(abs(w_grid-w))]-s_reg.min():+.4f} RMSE")
+print(f"flat blend  : optimum at w={w_grid[s_flat.argmin()]:.3f}, "
+      f"shipped w={w:.2f} costs {s_flat[np.argmin(abs(w_grid-w))]-s_flat.min():+.4f} RMSE")
+print(f"flat to within 0.02 over w in [{band.min():.2f}, {band.max():.2f}]")
+"""),
     md("""
+*Figure 3. Out-of-fold RMSE against the blend weight. Under the regime-aware rule we ship, the
+curve is flat across the shaded band and 0.87 costs under 0.01 RMSE against the optimum. The
+grey curve is the flat blend, whose optimum sits higher: the weight and the cutoff are chosen
+together, so neither is optimal without the other.*
+
 The rule is one threshold with the weight held at its already-validated value, and it
 improves on **every** held-out seed. We ship the weight and cutoff read from `blend.json`
 above: **0.87 physics + 0.13 ExtraTrees below a predicted yield of 60, pure physics above
@@ -582,42 +647,36 @@ for name, r in sorted(mc.items(), key=lambda kv: kv[1]["train_rmse"]):
     print(f"{name:16s} {r['n_free']:5d} {r['train_rmse']:11.4f}")
 """),
     md("""
-- **`neutral`** forces both reactions thermally neutral ($a_1=a_2=0$). It is clearly worse,
-  so the heat terms do real work.
-- **`flowU`** lets jacket heat transfer scale as $(Q/Q_{ref})^n$, a Reynolds-number effect.
-  The exponent came back at $n \\approx -0.03$, inactive. Constant-$U$ plug flow is the right
-  form, and we kept the simpler 7-parameter model.
-- **Tanks-in-series** tested whether axial dispersion matters. At *fixed* parameters the
-  entire effect is worth ~0.08 RMSE; the larger apparent gain on refitting was the optimizer
-  exploiting the coarse cascade's discretization error, not physics. Plug flow holds.
-  **Rejected.**
-- **A parallel $A \\to C$ path.** The problem statement calls the network *"series-parallel"*
-  while listing only $A \\to B \\to C$, so we fitted the parallel path rather than assume
-  either reading. Adding $\\ln k_{3,ref}$, $E_3$ and $a_3$ buys **+0.0019** train RMSE
-  (3.6540 vs 3.6559) for three extra parameters, while 10-fold CV over three seeds gets
-  **worse, 6.7103 vs 6.3579**, and unstable, swinging 5.41 / 8.13 / 6.59. Negligible train
-  gain with degraded generalization is what fitting noise looks like. **Rejected.**
-- **Free reaction orders $n_1$, $n_2$.** This is the one entry here that fits *better* and we
-  kept the simpler form anyway. Letting $n_2$ float reaches train **3.536** at $n_2 = 1.5$
-  against **3.656** for first-order. We ship first-order on mechanism, not on fit: elementary
-  steps are first-order in the reacting species by construction, and $n \\neq 1$ puts a
-  $C_{A0}^{\\,n-1}$ factor in the mass balance, so inlet concentration stops cancelling from
-  the yield expression. That would turn the concentration result in section 6, $r = +0.009$,
-  from a consequence of the model into a coincidence. We traded 0.12 RMSE of training fit for
-  a mechanism we can defend. **Not rejected on generalization: we never ran that comparison,
-  and we do not claim it.**
+| Variant | Measured | Verdict |
+|---|---|---|
+| **`neutral`**, $a_1=a_2=0$ | clearly worse | the heat terms do real work |
+| **`flowU`**, $U \\propto (Q/Q_{ref})^n$ | $n \\approx -0.03$, inactive | kept the 7-parameter model |
+| **Tanks-in-series** | ~0.08 RMSE at *fixed* parameters | plug flow holds |
+| **Parallel $A \\to C$**, adding $\\ln k_{3,ref}$, $E_3$, $a_3$ | train **+0.0019** (3.6540 vs 3.6559); 10f-CV over three seeds **worse, 6.7103 vs 6.3579**, swinging 5.41 / 8.13 / 6.59 | fitting noise |
+| **Free orders $n_1$, $n_2$** | train **3.536** at $n_2 = 1.5$ vs **3.656** | fits better, rejected on mechanism |
 
-**Flow-dependent heat transfer is absent, and that is a finding about the reactor.** If the
-jacket were tube-side limited, the wall coefficient would follow a Dittus-Boelter-type
-correlation, $h \\propto Re^{0.8}$, giving $n \\approx 0.8$ in $U = U_0 (Q/Q_{ref})^n$. The
-profile in section 5b puts $n \\in [-0.2, 0]$ and prices $n = 0.8$ at **+11.40 RMSE**. So the
-controlling thermal resistance is not on the process side; it sits in the wall or on the
-jacket side, which is why flow rate enters the model only through residence time.
+Two of those need a word. The tanks-in-series gain looked larger on refitting, but that was
+the optimizer exploiting the coarse cascade's discretization error, not physics. And the
+problem statement calls the network *"series-parallel"* while listing only $A \\to B \\to C$,
+so we fitted the parallel path rather than assume either reading.
+
+**Free orders are the one entry that fits better, and we still did not ship them.** With
+$n \\neq 1$ the mass balance carries a $C_{A0}^{\\,n-1}$ factor, so inlet concentration stops
+cancelling and the $r = +0.009$ result in section 6 becomes a coincidence rather than a
+consequence. Elementary steps are first-order by construction. We traded 0.12 RMSE of training
+fit for a mechanism we can defend, and we do **not** claim first-order generalizes better: we
+never ran that comparison.
+
+**Flow-dependent heat transfer is absent, and that is a finding about the reactor.** A
+tube-side-limited jacket would follow Dittus-Boelter, $h \\propto Re^{0.8}$, giving
+$n \\approx 0.8$ in $U = U_0 (Q/Q_{ref})^n$. The profile in section 5b puts
+$n \\in [-0.2, 0]$ and prices $n = 0.8$ at **+11.40 RMSE**, so the controlling resistance sits
+in the wall or on the jacket side and flow enters only through residence time.
 
 ### Deliberately not attempted
 
 Neural networks (150 rows), XGBoost/LightGBM hyperparameter searches (boosting measured
-*worst* of everything we tried), polynomial feature explosion, and outlier removal. The
+*worst* of everything we tried), polynomial feature explosion, and outlier removal: the
 extreme rows are real physics regimes and carry the location of the yield cliff.
 """),
     md("""
@@ -655,7 +714,7 @@ for name, label in [("E2_kJ", "E2 (waste-reaction activation energy)"),
     print()
 """),
     md("""
-Three conclusions, each answering a challenge that was actually put to us.
+Three conclusions, each answering a challenge put to us.
 
 - **E₂ = 250 kJ/mol, 95% CI [234, 270].** An independent reviewer's model reported E₂ ≈ 155.
   That value sits at RMSE 6.28, nowhere near the interval, so it is excluded by the data
@@ -674,11 +733,10 @@ notes, recovered E₁ = 43.2 (ours 43.16), E₂ = 250.5 (ours 250.07), a₁ = �
 3.6559). Its own E₂ profile gave 95% [234, 271] against our [234, 270].
 
 **Why we ship a single fit rather than an ensemble.** Averaging over parameter uncertainty is
-the right instinct under squared error, so we tested it: eight distinct admissible starting
-vectors (E₂ spanning 210–265) were refit inside a fold, and all eight converged to the *same*
-optimum to within 2e-4. The apparent spread came from pinning during profiling; once the pin
-is released there is a single well-defined optimum. There is no posterior to average over,
-which is itself the robustness claim.
+the right instinct under squared error, so we tested it: eight admissible starting vectors
+(E₂ spanning 210–265), refit inside a fold, all converged to the *same* optimum within 2e-4.
+The apparent spread was an artifact of pinning during profiling. There is no posterior to
+average over, which is itself the robustness claim.
 """),
     md("""
 ## 6. What the recovered parameters mean
@@ -712,7 +770,7 @@ plt.tight_layout(); plt.show()
 print(f"k1 = k2 at approximately {cross:.0f} K")
 """),
     md("""
-*Figure 2. Left: the two fitted Arrhenius curves cross at the temperature where destruction of
+*Figure 4. Left: the two fitted Arrhenius curves cross at the temperature where destruction of
 B overtakes its formation. Right: training parity, coloured by mean temperature.*
 
 **The crossover temperature is the single most useful number we recovered.** Below it
@@ -738,6 +796,46 @@ print(f"at mean CA0 = {ca0:.2f} mol/L, adiabatic swings: {p.a1*ca0:+.0f} K then 
 print(f"net: {(p.a1 + p.a2)*ca0:+.1f} K  <- the near-cancellation")
 """),
     md("""
+**Feature importance, answered by the reactor rather than by a tree.** A split-count ranking
+tells you what a learner leaned on. Because our model is the mechanism, we can ask the
+question directly: move each input by 5% and integrate again. The ranking below is a property
+of the fitted reactor, not of any estimator.
+"""),
+    code("""
+# Central difference on each raw input, holding the fitted parameters fixed. Ten integrations.
+RAW = ["jacket_temperature_K", "inlet_temperature_K", "length_m",
+       "flow_rate_L_min", "concentration_mol_L"]
+NICE = {"jacket_temperature_K": "jacket T", "inlet_temperature_K": "inlet T",
+        "length_m": "length", "flow_rate_L_min": "flow rate",
+        "concentration_mol_L": "feed conc."}
+
+sens = {}
+for c in RAW:
+    hi, lo = train.copy(), train.copy()
+    hi[c] = hi[c] * 1.05
+    lo[c] = lo[c] * 0.95
+    d = (integrate(fitted, ode_inputs(hi), n_steps=SUBMIT_STEPS)
+         - integrate(fitted, ode_inputs(lo), n_steps=SUBMIT_STEPS)) / 2.0
+    sens[c] = float(np.abs(d).mean())
+
+order = sorted(sens, key=sens.get)
+fig, ax = plt.subplots(figsize=(7.4, 3.2))
+ax.barh([NICE[c] for c in order], [sens[c] for c in order], color="#4c72b0")
+for i, c in enumerate(order):
+    ax.text(sens[c] + 0.12, i, f"{sens[c]:.2f}", va="center", fontsize=9)
+ax.set_xlabel("mean |change in predicted yield| for a 5% change in the input (yield-points)")
+ax.set_title("sensitivity of the fitted reactor to each input")
+ax.set_xlim(0, max(sens.values()) * 1.18)
+plt.tight_layout(); plt.show()
+
+for c in reversed(order):
+    print(f"  {NICE[c]:>12s}  {sens[c]:6.2f}")
+"""),
+    md("""
+*Figure 5. Sensitivity of the fitted model to a 5% change in each input. The two temperatures
+dominate and feed concentration is last, which is the same conclusion the correlation and the
+$a_1$/$a_2$ cancellation reach by different routes.*
+
 ### 6b. Where the remaining error lives
 
 #### 6b-i. It is concentrated, not spread
@@ -795,7 +893,7 @@ ax[1].set_title("(b) out-of-fold RMSE by band")
 plt.tight_layout(); plt.show()
 """),
     md("""
-*Figure 3. Rows whose local neighbourhood already disagrees carry almost all of the error;
+*Figure 6. Rows whose local neighbourhood already disagrees carry almost all of the error;
 the settled majority is predicted almost exactly.*
 
 **29% of rows carry 91% of the squared error**, while the settled rows sit at an RMSE of
@@ -878,14 +976,14 @@ Averaging over the input distribution is not free. It slightly worsens one bound
 of the dead regime, where a row sitting just off zero gets lifted. The worst case in our
 out-of-fold predictions is **training row 97, true 0.282, raw model 0.000, smoothed 2.549.**
 
-That row is worth looking at rather than burying, because it is the *right* kind of failure.
-Interior dead-regime rows are exactly 0.000: all 15 training rows with jacket > 520 K and
-τ > 0.2 are exact zeros. A truth of 0.282 makes row 97 an **edge** row, so the model is
-correctly expressing uncertainty about where the cliff falls and has simply overshot here.
+It is the *right* kind of failure. Interior dead-regime rows are exactly 0.000: all 15
+training rows with jacket > 520 K and τ > 0.2 are exact zeros. A truth of 0.282 makes row 97
+an **edge** row, so the model is correctly expressing uncertainty about where the cliff falls
+and has overshot.
 
-The trade is roughly **5 squared-error units lost against 616 recovered**. We did not add a
-dead-regime guard to suppress it: that would be a third tuned rule bolted onto a mechanism
-that is already physically justified.
+The trade is roughly **5 squared-error units lost against 616 recovered**. We added no
+dead-regime guard: that would be a third tuned rule bolted onto a mechanism already
+physically justified.
 
 #### 6b-iii. How much of the final score is luck?
 
@@ -1004,12 +1102,12 @@ not.
 (102 ms at the 2048 substeps used for the submission), against **5573 ms** for a SciPy BDF
 solve of the same system: a **225x** speed-up, with the two agreeing to 0.017 yield-points.
 
-We deliberately do *not* quote a runtime for the original simulation. The problem statement
+We deliberately do *not* quote a runtime for the original simulation: the problem statement
 describes it only as *"computationally expensive and too slow for real-time plant
-optimization"* and never publishes a number, so our comparison is against a reference solver
-we timed ourselves. Either way the surrogate is comfortably inside a real-time control loop,
-which is what it was wanted for. Because the parameters are physical, an engineer can
-sanity-check them against known kinetics instead of trusting a black box.
+optimization"* and never publishes a number, so we compare against a reference solver we
+timed ourselves. Either way the surrogate is comfortably inside a real-time control loop, and
+because the parameters are physical an engineer can sanity-check them against known kinetics
+instead of trusting a black box.
 """),
 ]
 

@@ -14,9 +14,13 @@ process side — most likely jacket-side or wall-limited — and flow enters onl
 residence time.
 
 **2. How do you know both reactions are first-order?**
-We fitted the orders free rather than assume them: cross-validated RMSE gets **+0.072
-worse** over 5 seeds (one seed -0.189) against a pre-registered 0.3 bar, so first-order is
-measured, not assumed.
+We do not, and we should be precise about it. First-order is a **modelling choice**, not
+something we measured. We profiled the orders (`scripts/profile_orders.py`) and letting n2
+float actually fits the training data *better*: **3.536** at n2 = 1.5 against **3.656** for
+first-order. We keep first-order because elementary steps are first-order in the reacting
+species by construction, and because n != 1 introduces a `CA0^(n-1)` factor that destroys the
+concentration cancellation our whole feed-composition argument rests on. We traded 0.12 of
+training fit for a mechanism we can defend.
 
 **3. The problem statement says "series-parallel". Where is your parallel path?**
 We fitted one — adding ln_k3, E3 and a3 buys **+0.0019** train RMSE for three parameters
@@ -287,3 +291,15 @@ disliking the result, and we think that is worth disclosing rather than hiding.
 `scripts/audit_pitch.py` reads every number in these documents live from `artifacts/`,
 verifies the submission's sha256 is `c68e0e748e4928f2`, checks the policy triple agrees
 across four files, and fails if any retracted number reappears.
+
+**43. Another team used non-integer reaction orders and scored better than you. Why didn't you?**
+They are right that it fits better, and we measured the same thing: free orders reach
+**3.536** on train against our **3.656**. We chose mechanism over fit. A fractional order is
+an empirical exponent that improves the curve without naming a physical step, and here it has
+a specific cost: with n != 1 the mass balance carries a `CA0^(n-1)` term, inlet concentration
+stops cancelling, and our strongest chemical result — that feed concentration barely moves
+yield, at r = **+0.009**, because both steps are first-order — stops being a consequence of
+the model and becomes a coincidence. We were unwilling to buy 0.12 RMSE by giving that up.
+The honest caveat: we never ran a cross-validated comparison of the two forms, so we cannot
+claim first-order generalizes better. We claim only that it is mechanistically interpretable
+and that the fit cost is small.

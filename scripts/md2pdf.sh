@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Render a markdown doc to a shareable PDF.
 #
-#   scripts/md2pdf.sh docs/pitch/STUDY_GUIDE.md
-#   scripts/md2pdf.sh docs/pitch/STUDY_GUIDE.md ~/Desktop/study-guide.pdf
+#   scripts/md2pdf.sh docs/pitch/support/STUDY_GUIDE.md
+#   scripts/md2pdf.sh docs/pitch/support/STUDY_GUIDE.md ~/Desktop/study-guide.pdf
 #
 # Uses pandoc + XeLaTeX. XeLaTeX rather than pdflatex because these documents contain
 # Unicode that pdflatex cannot typeset: sigma, tau, subscripts, times, >=, arrows.

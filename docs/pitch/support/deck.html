@@ -515,7 +515,7 @@ dT/dz  =  a1*k1*CA + a2*k2*CB + U*(T_jacket - T)</pre>
             <tr><td>a₁ = 0 alone — testing our <em>own</em> mechanism</td><td class="bad">+4.54</td><td class="proto">train</td></tr>
             <tr><td><strong>Parallel A → C path</strong></td><td>train <span class="good">+0.0019</span> for 3 params; CV <span class="bad">−0.352</span> worse</td><td class="proto">train / 10f-CV ×3</td></tr>
             <tr><td>Flow-dependent U, (Q/Q<sub>ref</sub>)<sup>n</sup></td><td class="bad">n = 0.8 costs +11.40</td><td class="proto">train / profile</td></tr>
-            <tr><td>Free reaction orders n₁, n₂</td><td class="bad">+0.072 (one seed −0.189)</td><td class="proto">10f-CV ×5</td></tr>
+            <tr><td>Free reaction orders n₁, n₂</td><td class="bad">train <b>3.536</b> at n2 = 1.5 vs 3.656; rejected on mechanism, not fit</td><td class="proto">train profile</td></tr>
             <tr><td>Axial dispersion (tanks-in-series)</td><td>~0.08 at fixed params</td><td class="proto">train</td></tr>
             <tr><td>Residual ML corrector</td><td class="bad">+0.027 vs a 0.3 bar</td><td class="proto">10f-CV ×5</td></tr>
             <tr><td>E₂ = 155 kJ/mol (external audit)</td><td class="bad">+2.62</td><td class="proto">train</td></tr>

@@ -46,7 +46,8 @@ README.md                 <- you are here
 CLAUDE.md                 <- engineering notes, gotchas, and every rejected hypothesis
 
 data/                     train_dataset.csv, test_dataset.csv (unmodified)
-docs/                     problem statement PDF, original team brief (guide.md)
+docs/reference/           problem statement PDF, original team brief (guide.md)
+docs/pitch/               pitch materials — see docs/pitch/README.md
 src/                      the model — see below
 scripts/                  everything runnable; each is one experiment
 artifacts/                fitted parameters, CV results, profiles (JSON/npy)
@@ -119,7 +120,7 @@ and B is destroyed. A quarter of the training rows are *exactly* zero (dead reac
    silently fails and the fit uses 1 of 12 cores.
 2. **The convergence guard in `residuals()` defaults OFF and must stay off during
    `least_squares` polish** — it's a cliff in the objective and wrecks the Jacobian.
-3. **`guide.md` (in `docs/`) is a team brief, not ground truth.** Several of its numbers do
+3. **`guide.md` (in `docs/reference/`) is a team brief, not ground truth.** Several of its numbers do
    not reproduce. Re-measure before quoting it.
 
 Full detail on all three, plus every hypothesis we tested and rejected, is in `CLAUDE.md`.

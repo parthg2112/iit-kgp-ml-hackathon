@@ -35,10 +35,13 @@ PITCH = ROOT / "docs" / "pitch"
 SUBMISSION = ROOT / "claude ke chhatore.csv"
 SUBMISSION_SHA16 = "c68e0e748e4928f2"
 
-DECK, APPENDIX, QA = "deck.md", "appendix.md", "qa_bank.md"
+# Paths are relative to PITCH: final/ is what gets submitted, support/ is Q&A depth.
+DECK = "support/deck.md"
+DECK_HTML = "support/deck.html"
+APPENDIX, QA = "support/appendix.md", "support/qa_bank.md"
 # SLIDES is the deck actually presented at the offline round (5-slide cap). DECK is the
 # 12-slide version, retained as Q&A depth and explicitly NOT presented.
-SLIDES = "slides.md"
+SLIDES = "final/slides.md"
 
 
 def load(name):
@@ -329,7 +332,7 @@ def check_deck_parity(problems, notes):
     in one and missed in the other is invisible in review, so compare their numeric literals
     directly. CSS lengths and the in-page crossover computation are excluded -- the latter
     deliberately recomputes 449.9 K from the fitted parameters so the figure cannot drift."""
-    md_p, html_p = PITCH / DECK, PITCH / "deck.html"
+    md_p, html_p = PITCH / DECK, PITCH / DECK_HTML
     if not (md_p.exists() and html_p.exists()):
         return
 

@@ -225,12 +225,33 @@ Helpfulness on the test rows is *unknowable without labels* and we do not quote 
 | a1 = 0 alone | +4.54 | train |
 | Parallel A→C (ln_k3, E3, a3 free) | train +0.0019; CV **-0.352**, seeds 5.41 / 8.13 / 6.59 | train / 10f-CV, 3 seeds |
 | Flow-dependent U, n = 0.8 | +11.40 | train |
-| Free reaction orders n1, n2 | +0.072, one seed -0.189 | 10f-CV, 5 seeds |
+| Free reaction orders n1, n2 | train **3.536** at n2 = 1.5 vs 3.656 first-order | train profile |
 | Axial dispersion (tanks-in-series) | ~0.08 at fixed parameters | train |
 | Residual ML corrector | +0.027 vs a 0.3 bar, 3 correctors | 10f-CV, 5 seeds |
 | Bagged physics as a tree replacement | recovers +0.13 of +0.28; one seed worse | 10f-CV, 3 seeds |
 | Ensemble over parameter uncertainty | degenerate, spread 2e-4 | — |
 | E2 = 155 (external audit) | +2.62 | train |
+
+**On free reaction orders, which is the one entry above that we did NOT reject on fit.**
+Letting n1 and n2 float makes the training fit *better*: `profile_order_n2.json` reaches
+**3.536** at n2 = 1.5 against 3.656 for first-order, and a refit with the E2 box widened gets
+to 3.504. We ship first-order anyway, on mechanism:
+
+- Elementary reaction steps are first-order in the reacting species by construction. A
+  fractional order is an empirical fudge that buys fit without naming a mechanism.
+- **n ≠ 1 destroys our own concentration result.** The mass balance picks up a `CA0^(n-1)`
+  factor, so inlet concentration stops cancelling from the yield expression. Our measured
+  `corr(concentration, yield) = +0.009` and the a1/a2 near-cancellation both become
+  coincidences rather than consequences. We would be trading a mechanism we can defend for
+  0.12 RMSE of training fit.
+- In the n2 = 1.5 profile E2 pins at its 280 bound, so that fit is not a clean optimum in any
+  case; it is the same one-at-a-time profiling artifact documented for E2 in section 3.
+
+An earlier revision of this table reported this rejection as "+0.072 worse, one seed -0.189,
+10f-CV over 5 seeds". **That figure was unsupported**: `scripts/profile_orders.py` contains no
+cross-validation, only train profiles, and no artifact or log holds such a result. It has been
+removed. If a free-order model is ever to be rejected on generalization, the CV has to be run
+first.
 
 **On the A→C test specifically:** the integrator is exact, not an approximation. A decays at
 `kA = k1 + k3` while B is produced at `k1`, so the analytic step generalises. It reduces to

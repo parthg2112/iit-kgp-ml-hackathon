@@ -234,7 +234,7 @@ Nothing below was argued away. Each row carries its own protocol.
 | a1 = 0 alone — testing our *own* concentration mechanism | **+4.54** | train |
 | **Parallel A → C path** | train **+0.0019** for 3 extra params; CV **-0.352** worse | train / 10f-CV, 3 seeds |
 | Flow-dependent jacket U, (Q/Qref)^n | n = 0.8 costs **+11.40**; 95% CI [-0.03, 0.02] | train / profile |
-| Free reaction orders n1, n2 | +0.072 worse, one seed -0.189 | 10f-CV, 5 seeds |
+| Free reaction orders n1, n2 | train **3.536** at n2 = 1.5 vs 3.656; rejected on mechanism, not fit | train profile |
 | Axial dispersion (tanks-in-series) | ~0.08 at fixed parameters | train |
 | Residual ML corrector on our residuals | best +0.027 against a 0.3 bar | 10f-CV, 5 seeds |
 | E2 = 155 kJ/mol (an external audit's value) | **+2.62** | train |

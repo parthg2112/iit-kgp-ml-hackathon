@@ -97,7 +97,7 @@ found by our own checking after submission:
 | Predictions | `claude ke chhatore.csv` |
 | Documented notebook (complete workflow) | `notebook/final.ipynb` — self-contained, 46 cells, executes top to bottom |
 | Source code | `src/` (model), `scripts/` (every experiment, one question each) |
-| Presentation | `docs/pitch/slides.md` · `slides.html` (5 slides) |
+| Presentation | `docs/pitch/final/slides.md` · `slides.html` (5 slides) |
 | Fitted parameters, CV results, profiles | `artifacts/` |
 | Engineering record, including every rejected hypothesis | `CLAUDE.md` |
 

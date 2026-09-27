@@ -35,13 +35,10 @@ PITCH = ROOT / "docs" / "pitch"
 SUBMISSION = ROOT / "claude ke chhatore.csv"
 SUBMISSION_SHA16 = "c68e0e748e4928f2"
 
-# Paths are relative to PITCH: final/ is what gets submitted, support/ is Q&A depth.
-DECK = "support/deck.md"
-DECK_HTML = "support/deck.html"
-APPENDIX, QA = "support/appendix.md", "support/qa_bank.md"
-# SLIDES is the deck actually presented at the offline round (5-slide cap). DECK is the
-# 12-slide version, retained as Q&A depth and explicitly NOT presented.
-SLIDES = "final/slides.md"
+# The 12-slide long deck, appendix and QA bank were internal working material and have
+# been removed from the public repo. The audit now runs against the 5-slide deck alone.
+DECK = APPENDIX = QA = SLIDES = "final/slides.md"
+DECK_HTML = "final/slides.html"
 
 
 def load(name):

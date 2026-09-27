@@ -1,15 +1,15 @@
 # Reactor Yield Surrogate — Team *Claude ke Chhatore*
 
 IIT-KGP ML Hackathon: predict `overall_yield` of product B from five reactor operating
-conditions. 150 training rows, 50 test rows, scored on RMSE. **One submission, no
-leaderboard feedback.**
+conditions. 150 training rows, 50 test rows, scored on RMSE. One submission, no leaderboard
+feedback.
 
 **Approach in one line:** we did not fit a regressor to the target — we recovered the
 reactor's governing differential equations and fitted their seven physical parameters. A
 13% weight on an ExtraTrees model rides along for variance reduction; the mechanism is the
 ODE.
 
-### What ships
+## Results
 
 `claude ke chhatore.csv`, built by `scripts/make_submission.py` from the policy triple
 **(σ, w, cutoff) = (1.67 K, 0.87, 60)** stored in `artifacts/blend.json`: physics predictions
@@ -18,10 +18,10 @@ noise-averaged over σ = 1.67 K, blended 0.87/0.13 with the tree below a predict
 
 **Every number below carries its protocol — they are not comparable.**
 `train` = fit and scored on all 150 rows. `10f-CV` = repeated 10-fold, parameters refit per
-fold. `LOSO` = policy chosen on two seeds and scored on the third — the headline figure,
-but **read it as a lower bound**: all three seeds re-partition the same 150 rows, so LOSO
-prices fold-partition noise, not hyper-parameter selection. A row-level split-half puts the
-selection cost at **+0.371**. See CLAUDE.md.
+fold. `LOSO` = policy chosen on two seeds and scored on the third — the headline figure, but
+**read it as a lower bound**: all three seeds re-partition the same 150 rows, so LOSO prices
+fold-partition noise, not hyper-parameter selection. A row-level split-half puts the
+selection cost at **+0.371**.
 
 | Model | Protocol | RMSE |
 |---|---|---|
@@ -35,24 +35,19 @@ selection cost at **+0.371**. See CLAUDE.md.
 A 50-row test set carries large sampling noise on top of any of these: bootstrapping the
 out-of-fold predictions gives a 5th–95th percentile of **[2.41, 9.07]**.
 
----
-
 ## Where things are
 
 ```
 claude ke chhatore.csv     <- THE SUBMISSION. 50 rows, one column. Do not hand-edit.
 notebook/final.ipynb      <- the finalist deliverable; self-contained, runs top to bottom
 README.md                 <- you are here
-CLAUDE.md                 <- engineering notes, gotchas, and every rejected hypothesis
 
 data/                     train_dataset.csv, test_dataset.csv (unmodified)
-docs/reference/           problem statement PDF, original team brief (guide.md)
-docs/pitch/               pitch materials — see docs/pitch/README.md
+docs/pitch/               the submitted pitch deck — see docs/pitch/README.md
 src/                      the model — see below
 scripts/                  everything runnable; each is one experiment
 artifacts/                fitted parameters, CV results, profiles (JSON/npy)
 figures/                  diagnostic plots
-reference/                an external audit's competing predictions, kept for comparison
 ```
 
 ### `src/` — the model
@@ -81,22 +76,20 @@ make_submission.py        build the CSV (asserts the contract, re-reads to verif
 build_notebook.py         regenerate notebook/final.ipynb
 ```
 
----
-
 ## Running anything
 
-The default `python` (3.13) has **no scientific stack**. Use 3.11:
+The default `python` (3.13) has **no scientific stack**. Everything runs under Python 3.11
+with numpy, scipy, scikit-learn and pandas (there is no `requirements.txt`; the 3.11
+interpreter already has what is needed):
 
 ```bash
-PY="C:/Users/USER/AppData/Local/Programs/Python/Python311/python.exe"
-$PY scripts/check_integrator.py     # start here — verifies the core is sound
-$PY scripts/make_submission.py      # rebuild the CSV
+python3.11 scripts/check_integrator.py     # start here — verifies the core is sound
+python3.11 scripts/make_submission.py      # rebuild the CSV
 ```
 
-Run scripts from the repo root. Long fits: use `-u` and redirect to a log, or output buffers
+Run scripts from the repo root; they insert the repo root on `sys.path` and import `src.*`.
+Output lands in `artifacts/`. Long fits: use `-u` and redirect to a log, or output buffers
 until the end.
-
----
 
 ## The physics, briefly
 
@@ -114,13 +107,9 @@ than it destroys it, above it the reverse.
 Yield is governed by a ridge — too cold or too fast and A never converts; too hot or too slow
 and B is destroyed. A quarter of the training rows are *exactly* zero (dead reactor).
 
-## Three things that will trip you up
+## Two things that will trip you up
 
 1. **Never pass a lambda to `differential_evolution`** — it can't be pickled, so `workers=-1`
    silently fails and the fit uses 1 of 12 cores.
 2. **The convergence guard in `residuals()` defaults OFF and must stay off during
    `least_squares` polish** — it's a cliff in the objective and wrecks the Jacobian.
-3. **`guide.md` (in `docs/reference/`) is a team brief, not ground truth.** Several of its numbers do
-   not reproduce. Re-measure before quoting it.
-
-Full detail on all three, plus every hypothesis we tested and rejected, is in `CLAUDE.md`.
